@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -29,6 +31,9 @@ jobs:
 
       - name: Validate repository safety policy
         run: python tools/check_repository_policy.py
+
+      - name: Scan reachable Git history for secrets
+        run: python tools/check_git_history_secrets.py
 
       - name: Compile repository tooling
         run: python -m compileall -q tools

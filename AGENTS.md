@@ -1,12 +1,12 @@
 # Repository operating rules
 
-This repository contains private Home Assistant configuration source. Treat every change as potentially production-sensitive even though GitHub Actions are validation-only.
+This is a **public** repository for the explicitly reviewed, publishable subset of Home Assistant configuration source. Treat every change as both production-sensitive and public-information-sensitive even though GitHub Actions are validation-only.
 
 ## Source-of-truth boundary
 
-- Track only declarative, reviewable Home Assistant source that has been explicitly classified as safe for Git.
-- Never commit secrets, runtime state, recorder/history databases, logs, backups, tokens, private keys, `.storage/`, `.cloud/`, or private media/camera content.
-- Do not assume private-repository visibility makes secret storage acceptable.
+- Track only declarative, reviewable Home Assistant source that has been explicitly classified as safe for public Git.
+- Never commit secrets, runtime state, recorder/history databases, logs, backups, tokens, private keys, `.storage/`, `.cloud/`, credential-bearing URLs, or private media/camera content.
+- Do not publish unnecessary private runtime coordinates, device identifiers, household metadata or topology simply because they are not credentials.
 - `RPi5_main` owns the RPi5 host/runtime layer. Do not duplicate host ingress, systemd, Docker runtime, backup or privileged deployment ownership here.
 
 ## Change workflow
@@ -34,7 +34,7 @@ Without separate explicit authorization, do not:
 - modify `.storage/` or UI-managed integration state;
 - change Cloudflare/ingress, Docker/systemd ownership or host firewall state;
 - create/delete Home Assistant backups;
-- expose secret values in logs, issues, PRs or CI artifacts.
+- expose secret values or private runtime details in logs, issues, PRs or CI artifacts.
 
 Prefer supported reload mechanisms for reloadable configuration. A Home Assistant restart is a separate production action when required.
 
@@ -42,14 +42,17 @@ Prefer supported reload mechanisms for reloadable configuration. A Home Assistan
 
 The first live interaction must be bounded and read-only. Inventory names/types/metadata only as needed to classify files. Never print the contents of `secrets.yaml`, `.storage/`, auth/token material, recorder DBs, private keys, or other excluded runtime data.
 
+Before importing any live YAML into this public repository, review it for both credentials and unnecessary household/device metadata. Sanitize or keep it outside Git if publication is not required for the dashboard/configuration goal.
+
 ## Validation
 
 Before any production apply:
 
 1. repository policy check passes;
-2. YAML/static validation passes;
-3. exact production Home Assistant version is known;
-4. candidate configuration passes Home Assistant `check_config` against that exact intended version;
-5. diff is reviewed for secrets/private-runtime leakage;
-6. rollback revision and Home Assistant backup path are established;
-7. production apply is separately authorized.
+2. reachable Git-history secret scan passes;
+3. YAML/static validation passes;
+4. exact production Home Assistant version is known;
+5. candidate configuration passes Home Assistant `check_config` against that exact intended version;
+6. diff is reviewed for secrets/private-runtime leakage and public metadata exposure;
+7. rollback revision and Home Assistant backup path are established;
+8. production apply is separately authorized.
