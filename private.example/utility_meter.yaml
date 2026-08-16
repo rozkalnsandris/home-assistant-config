@@ -1,0 +1,4 @@
+# Example only. Replace the source entity locally.
+example_energy_daily:
+  source: sensor.example_energy
+  cycle: daily

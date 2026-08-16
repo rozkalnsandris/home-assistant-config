@@ -1,0 +1,3 @@
+# Example only. Copy to private/customize.yaml and replace placeholders locally.
+climate.example_thermostat:
+  target_temp_step: 0.5

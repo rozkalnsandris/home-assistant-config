@@ -1,0 +1,6 @@
+# Example only. Add only the local exclusions required by the instance.
+purge_keep_days: 7
+commit_interval: 30
+exclude:
+  entities:
+    - sensor.example_noisy_measurement

@@ -1,0 +1,31 @@
+homeassistant:
+  packages: !include_dir_named packages
+  customize: !include private/customize.yaml
+
+# Loads the default set of integrations.
+default_config:
+
+# Theme files remain local until their provenance is explicitly approved.
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# Household/network-specific blocks are local-only and never committed.
+http: !include private/http.yaml
+
+logbook:
+history:
+backup:
+
+lovelace: !include private/lovelace.yaml
+utility_meter: !include private/utility_meter.yaml
+recorder: !include private/recorder.yaml
+
+logger:
+  default: warning
+  logs:
+    homeassistant.components.assist_pipeline: debug
+    wyoming: debug

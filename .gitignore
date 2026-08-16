@@ -1,5 +1,6 @@
 # Home Assistant private/runtime state
 secrets.yaml
+/private/
 .storage/
 .cloud/
 home-assistant_v2.db*

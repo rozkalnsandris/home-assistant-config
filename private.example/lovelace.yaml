@@ -1,0 +1,9 @@
+# Example only. The real YAML dashboard registration remains private in this phase.
+mode: storage
+dashboards:
+  example-yaml:
+    mode: yaml
+    title: Example YAML
+    icon: mdi:home-assistant
+    show_in_sidebar: true
+    filename: dashboards/example.yaml
