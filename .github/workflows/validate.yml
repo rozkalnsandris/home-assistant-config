@@ -40,3 +40,22 @@ jobs:
 
       - name: Compile repository tooling
         run: python -m compileall -q tools tests
+
+      - name: Build isolated public Home Assistant fixture
+        run: python tools/build_public_validation_fixture.py --output "$RUNNER_TEMP/ha-public-config"
+
+      - name: Validate with exact production Home Assistant version
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          version="$(python tools/build_public_validation_fixture.py --print-version)"
+          image="ghcr.io/home-assistant/home-assistant:${version}"
+          docker pull "$image"
+          digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")"
+          printf 'home_assistant_image=%s\n' "$digest"
+          docker run --rm \
+            -v "$RUNNER_TEMP/ha-public-config:/config" \
+            "$image" \
+            python -m homeassistant --script check_config \
+              --config /config \
+              --fail-on-warnings
