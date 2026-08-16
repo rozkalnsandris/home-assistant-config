@@ -1,0 +1,51 @@
+# Home Assistant private/runtime state
+secrets.yaml
+.storage/
+.cloud/
+home-assistant_v2.db*
+home-assistant.log*
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+/backups/
+/backup/
+*.tar
+*.tgz
+
+# Credentials / private key material
+*.pem
+*.key
+*.p12
+*.pfx
+*.agekey
+
+# Runtime/generated content
+__pycache__/
+*.py[cod]
+*.pid
+*.tmp
+*.swp
+*.swo
+/deps/
+/tts/
+/media/
+
+# Third-party/generated Home Assistant content
+/custom_components/
+/www/community/
+
+# Local tooling/editor files
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local evidence/export scratch paths
+/evidence/
+/exports/
