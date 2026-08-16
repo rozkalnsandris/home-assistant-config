@@ -82,6 +82,8 @@ The emitted candidate scope is correspondingly one of:
 
 Any other observed private address remains `NEEDS_REVIEW` because the verifier cannot prove from that class alone that the address is the intended immediate proxy peer.
 
+The first live execution made while real authorized ADMIN traffic was flowing through Cloudflare Access produced `READY_FOR_PRIVATE_SINGLE_HOST_BINDING` with `single-host-primary-ipv4`. The exact address remains local and is not committed or emitted.
+
 A READY result supports a local-only `private/http.yaml` candidate shaped as:
 
 ```yaml
@@ -92,6 +94,28 @@ trusted_proxies:
 
 The real private address stays outside Git. Historical journal evidence or a successful public probe alone can never produce READY.
 
-A green audit does **not** authorize production mutation. Before apply, the private candidate still requires exact Home Assistant `2026.8.2` config validation, a backup/rollback gate, remote-path verification and LAN break-glass verification. Any restart or live `http` change requires separate explicit owner authorization.
+## Exact-version candidate validation gate
+
+Before any production apply, validate the private single-host candidate against the already-running Home Assistant image:
+
+```bash
+sudo python tools/validate_trusted_proxy_candidate.py --stdout
+```
+
+The validator:
+
+- derives the same host primary IPv4 in memory and never prints it;
+- requires the running Home Assistant version to match `home-assistant-version.txt` exactly;
+- reuses the running container's immutable image identity instead of pulling an image;
+- creates only a temporary minimal candidate configuration outside the repository;
+- launches an ephemeral validation container with `--pull=never` and `--network=none`;
+- mounts only that temporary candidate config, never the production `/config` tree;
+- runs Home Assistant `check_config --fail-on-warnings`;
+- discards the candidate directory and ephemeral container afterward;
+- emits only sanitized pass/fail metadata.
+
+`VALIDATED_FOR_PREPRODUCTION` means the exact single-host candidate shape is accepted by the exact running Home Assistant version. It does **not** prove remote/local access behavior and does not authorize modifying the live `http` configuration.
+
+A green audit or candidate validation does **not** authorize production mutation. Before apply, the full private production candidate still requires backup/rollback preparation, exact Git revision binding, remote-path verification and LAN break-glass verification. Any restart or live `http` change requires separate explicit owner authorization.
 
 **Production deploy/change: NO.**
