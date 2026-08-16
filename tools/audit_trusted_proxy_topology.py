@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import ipaddress
 import json
+import os
 import socket
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +24,7 @@ from tools.inventory_home_assistant import running_containers, select_container
 DEFAULT_OUTPUT = ROOT / "exports" / "trusted-proxy-audit.json"
 HA_HOSTNAME = "ha.rozkalns.net"
 HA_PORT = 8123
+PROC_ROOT = Path("/proc")
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -51,6 +56,20 @@ def home_assistant_network_mode(docker: str, container: str) -> str:
 def cloudflared_is_active(systemctl: str) -> bool:
     result = _run([systemctl, "is-active", "cloudflared.service"])
     return result.returncode == 0 and result.stdout.strip() == "active"
+
+
+def cloudflared_main_pid(systemctl: str) -> int:
+    result = _run(
+        [systemctl, "show", "--property=MainPID", "--value", "cloudflared.service"]
+    )
+    raw = _require_success(result, "cloudflared MainPID lookup").strip()
+    try:
+        pid = int(raw)
+    except ValueError as exc:
+        raise RuntimeError("cloudflared MainPID was not numeric") from exc
+    if pid <= 0:
+        raise RuntimeError("cloudflared MainPID was not active")
+    return pid
 
 
 def parse_prefsrc(payload: str) -> str:
@@ -113,6 +132,174 @@ def tcp_reachable(address: str, port: int = HA_PORT, timeout: float = 1.0) -> bo
         return False
 
 
+def decode_proc_ipv4_endpoint(value: str) -> tuple[str, int]:
+    try:
+        address_hex, port_hex = value.split(":", 1)
+        if len(address_hex) != 8:
+            raise ValueError("unexpected IPv4 width")
+        address = socket.inet_ntoa(bytes.fromhex(address_hex)[::-1])
+        port = int(port_hex, 16)
+    except (ValueError, OSError) as exc:
+        raise RuntimeError("/proc/net/tcp contained an invalid IPv4 endpoint") from exc
+    return address, port
+
+
+def parse_proc_tcp_ipv4(text: str) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for line in text.splitlines()[1:]:
+        fields = line.split()
+        if len(fields) < 10:
+            continue
+        try:
+            local_address, local_port = decode_proc_ipv4_endpoint(fields[1])
+            remote_address, remote_port = decode_proc_ipv4_endpoint(fields[2])
+            inode = int(fields[9])
+        except (RuntimeError, ValueError):
+            continue
+        rows.append(
+            {
+                "local_address": local_address,
+                "local_port": local_port,
+                "remote_address": remote_address,
+                "remote_port": remote_port,
+                "state": fields[3],
+                "inode": inode,
+            }
+        )
+    return rows
+
+
+def socket_inodes_for_pid(pid: int, proc_root: Path = PROC_ROOT) -> set[int]:
+    fd_root = proc_root / str(pid) / "fd"
+    try:
+        entries = list(fd_root.iterdir())
+    except OSError as exc:
+        raise RuntimeError("could not inspect cloudflared file descriptors") from exc
+
+    inodes: set[int] = set()
+    for entry in entries:
+        try:
+            target = os.readlink(entry)
+        except OSError:
+            continue
+        if target.startswith("socket:[") and target.endswith("]"):
+            raw = target[len("socket:[") : -1]
+            try:
+                inodes.add(int(raw))
+            except ValueError:
+                continue
+    return inodes
+
+
+def origin_socket_evidence(
+    records: list[dict[str, object]], socket_inodes: set[int], primary_address: str
+) -> dict[str, bool]:
+    observed = False
+    source_matches = False
+    destination_matches = False
+
+    for record in records:
+        if record.get("inode") not in socket_inodes:
+            continue
+        if record.get("state") != "01":  # TCP_ESTABLISHED
+            continue
+        if record.get("remote_port") != HA_PORT:
+            continue
+
+        observed = True
+        if record.get("local_address") == primary_address:
+            source_matches = True
+        if record.get("remote_address") == primary_address:
+            destination_matches = True
+
+        if source_matches and destination_matches:
+            break
+
+    return {
+        "observed": observed,
+        "source_matches_primary": source_matches,
+        "destination_matches_primary": destination_matches,
+    }
+
+
+def inspect_cloudflared_origin_socket(
+    pid: int, primary_address: str, proc_root: Path = PROC_ROOT
+) -> dict[str, bool]:
+    inodes = socket_inodes_for_pid(pid, proc_root)
+    try:
+        tcp_text = (proc_root / "net" / "tcp").read_text(encoding="ascii")
+    except OSError as exc:
+        raise RuntimeError("could not read /proc/net/tcp") from exc
+    return origin_socket_evidence(parse_proc_tcp_ipv4(tcp_text), inodes, primary_address)
+
+
+def probe_public_route(attempts: int = 4, timeout: float = 2.0) -> bool:
+    """Make an unauthenticated read-only request through the public HA hostname."""
+    response_observed = False
+    for _ in range(attempts):
+        connection = http.client.HTTPSConnection(HA_HOSTNAME, timeout=timeout)
+        try:
+            connection.request(
+                "GET",
+                "/",
+                headers={
+                    "User-Agent": "ha-trusted-proxy-audit/2",
+                    "Connection": "close",
+                },
+            )
+            response = connection.getresponse()
+            response.read(1)
+            response_observed = True
+        except OSError:
+            pass
+        finally:
+            connection.close()
+        time.sleep(0.15)
+    return response_observed
+
+
+def observe_live_origin_socket(
+    pid: int,
+    primary_address: str,
+    *,
+    duration: float = 5.0,
+    interval: float = 0.02,
+    proc_root: Path = PROC_ROOT,
+) -> tuple[dict[str, bool], bool]:
+    best = inspect_cloudflared_origin_socket(pid, primary_address, proc_root)
+    probe_result = {"response_observed": False}
+
+    def _probe() -> None:
+        probe_result["response_observed"] = probe_public_route()
+
+    worker = threading.Thread(target=_probe, daemon=True)
+    worker.start()
+    deadline = time.monotonic() + duration
+
+    while time.monotonic() < deadline:
+        current = inspect_cloudflared_origin_socket(pid, primary_address, proc_root)
+        best = {
+            "observed": best["observed"] or current["observed"],
+            "source_matches_primary": (
+                best["source_matches_primary"] or current["source_matches_primary"]
+            ),
+            "destination_matches_primary": (
+                best["destination_matches_primary"]
+                or current["destination_matches_primary"]
+            ),
+        }
+        if (
+            best["observed"]
+            and best["source_matches_primary"]
+            and best["destination_matches_primary"]
+        ):
+            break
+        time.sleep(interval)
+
+    worker.join(timeout=max(0.0, duration))
+    return best, probe_result["response_observed"]
+
+
 def build_sanitized_result(
     *,
     network_mode: str,
@@ -121,20 +308,31 @@ def build_sanitized_result(
     self_source_match: bool,
     route_observed: bool,
     ha_port_reachable: bool,
+    live_origin_observed: bool,
+    live_origin_source_matches_primary: bool,
+    live_origin_destination_matches_primary: bool,
+    public_probe_response_observed: bool,
 ) -> dict:
     address_class = "private" if ipaddress.ip_address(primary_address).is_private else "other"
+    live_origin_confirmed = all(
+        (
+            live_origin_observed,
+            live_origin_source_matches_primary,
+            live_origin_destination_matches_primary,
+        )
+    )
     ready = all(
         (
             network_mode == "host",
             cloudflared_active,
             address_class == "private",
             self_source_match,
-            route_observed,
             ha_port_reachable,
+            live_origin_confirmed,
         )
     )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "home_assistant": {
             "container_detected": True,
             "network_mode": network_mode,
@@ -142,7 +340,13 @@ def build_sanitized_result(
         },
         "cloudflared": {
             "service_active": cloudflared_active,
-            "current_ha_route_to_host_lan_8123_observed": route_observed,
+            "journal_route_evidence_observed": route_observed,
+            "live_origin_socket_to_host_lan_8123_observed": live_origin_observed,
+            "live_origin_source_matches_primary": live_origin_source_matches_primary,
+            "live_origin_destination_matches_primary": (
+                live_origin_destination_matches_primary
+            ),
+            "public_probe_response_observed": public_probe_response_observed,
         },
         "network": {
             "primary_ipv4_class": address_class,
@@ -157,7 +361,9 @@ def build_sanitized_result(
         "privacy": {
             "exact_addresses_emitted": False,
             "journal_lines_emitted": False,
+            "proc_socket_addresses_emitted": False,
             "credentials_read": False,
+            "public_probe_credentials_sent": False,
         },
     }
 
@@ -177,6 +383,17 @@ def audit(
     self_match = self_route_source_matches(ip_cmd, address)
     route_seen = journal_observes_current_route(journalctl, address)
     reachable = tcp_reachable(address)
+
+    live = {
+        "observed": False,
+        "source_matches_primary": False,
+        "destination_matches_primary": False,
+    }
+    probe_response = False
+    if active:
+        pid = cloudflared_main_pid(systemctl)
+        live, probe_response = observe_live_origin_socket(pid, address)
+
     return build_sanitized_result(
         network_mode=network_mode,
         cloudflared_active=active,
@@ -184,6 +401,10 @@ def audit(
         self_source_match=self_match,
         route_observed=route_seen,
         ha_port_reachable=reachable,
+        live_origin_observed=live["observed"],
+        live_origin_source_matches_primary=live["source_matches_primary"],
+        live_origin_destination_matches_primary=live["destination_matches_primary"],
+        public_probe_response_observed=probe_response,
     )
 
 
@@ -199,7 +420,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Read-only audit of the Home Assistant/cloudflared trusted-proxy topology. "
-            "Exact private addresses and journal lines are never emitted."
+            "Exact private addresses, journal lines and /proc socket addresses are never emitted."
         )
     )
     parser.add_argument("--container", help="Explicit running Home Assistant container name")
