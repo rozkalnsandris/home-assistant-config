@@ -29,6 +29,9 @@ jobs:
       - name: Lint YAML
         run: yamllint -c .yamllint.yml .
 
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
       - name: Validate repository safety policy
         run: python tools/check_repository_policy.py
 
@@ -36,4 +39,4 @@ jobs:
         run: python tools/check_git_history_secrets.py
 
       - name: Compile repository tooling
-        run: python -m compileall -q tools
+        run: python -m compileall -q tools tests
