@@ -1,26 +1,44 @@
 # Dependencies
 
-This document will become the reviewed manifest of Home Assistant-side dependencies required by tracked configuration.
+This document records Home Assistant-side dependencies required by configuration that may eventually be tracked here.
 
-## Current state
+## Production baseline
 
-**Inventory pending.** No HACS/custom-card/custom-integration dependency is assumed yet.
+- Home Assistant: `2026.8.2`
+- Dependency evidence source: private, read-only inventory/audit performed before publication.
+- Generated HACS/community bundles and third-party custom integrations are **documented, not vendored**.
 
-Do not copy the entire generated HACS/community installation into Git by default. Record the dependency and its required version/source here, and track only code/assets that we intentionally own.
+## Custom integrations
 
-## Dependency record format
+| Name | Installed version | Source | Policy | Notes |
+| --- | --- | --- | --- | --- |
+| Browser Mod | `3.2.1` | `thomasloven/hass-browser_mod` | DOCUMENT_ONLY | Used by the YAML dashboard. |
+| HACS | `2.0.5` | `hacs/integration` | DOCUMENT_ONLY | Dependency manager/runtime integration; never vendor generated state. |
+| Scheduler | manifest reports `v0.0.0` | `nielsfaber/scheduler-component` | DOCUMENT_ONLY | Used by heater scheduling logic; manifest version is not treated as a reliable release pin. |
+| Hermes Agent (`hermes_conversation`) | `1.1.0` | `WolframRavenwolf/hermes-ha-integration` | DOCUMENT_ONLY | Every privately reviewed core source file exactly matched upstream tag `v1.1.0` by Git blob SHA. Upstream is MIT licensed. |
+| Assist TTS Router (`assist_tts_router`) | `0.2.0` | `xiasi0/assist_tts_router` | DOCUMENT_ONLY | Every privately reviewed source file exactly matched the reviewed public upstream files by Git blob SHA. The upstream repository did not expose license metadata during the audit, so source is not vendored here. |
 
-For each dependency record:
+## Frontend / Lovelace dependencies
 
-- name;
-- type: integration / frontend card / theme / blueprint / other;
-- source/project;
-- version or exact reviewed revision where practical;
-- configuration files that depend on it;
-- whether it is installed through HACS, built-in Home Assistant, or manually owned by us;
-- recovery/install note;
-- last verified Home Assistant version.
+The private audit confirmed installed community directories matching the custom cards used by the YAML dashboard:
 
-## Production version
+- Bubble Card;
+- ApexCharts Card;
+- Better Thermostat UI Card;
+- Button Card;
+- Auto Entities;
+- Card Mod;
+- Mushroom;
+- State Switch;
+- Stack In Card;
+- Scheduler Card.
 
-The exact live Home Assistant version must be inventoried before full configuration CI is enabled. Do not guess or silently use `latest` for acceptance testing.
+The audit also observed other community bundles. They may belong to the storage-managed dashboard or historical configuration, so they are not declared unused solely from this evidence.
+
+Exact frontend package versions were not recovered from private HACS storage because `.storage/` is intentionally excluded from public-source inventory. When a precise version becomes necessary for recovery or validation, record it from a safe upstream/HACS metadata source rather than copying `.storage` into Git.
+
+## Source policy
+
+Do not copy the entire generated HACS/community installation into this repository. Record dependency name, source and version/revision when safely known. Track third-party code only when there is an explicit reason, compatible licensing, and a separate review.
+
+Self-authored configuration or assets may be tracked only after public-information and provenance review.
