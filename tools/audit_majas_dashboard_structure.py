@@ -10,222 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_VERSION_FILE = ROOT / "home-assistant-version.txt"
 DEFAULT_CONTAINER = "homeassistant"
 DEFAULT_TITLE = "Mājas YAML"
-
-
-class DashboardLoader(yaml.SafeLoader):
-    """Safe YAML loader that preserves Home Assistant tags without resolving them."""
-
-
-def _construct_unknown_tag(
-    loader: DashboardLoader, tag_suffix: str, node: yaml.Node
-) -> dict[str, Any]:
-    if isinstance(node, yaml.ScalarNode):
-        value: Any = loader.construct_scalar(node)
-    elif isinstance(node, yaml.SequenceNode):
-        value = loader.construct_sequence(node)
-    elif isinstance(node, yaml.MappingNode):
-        value = loader.construct_mapping(node)
-    else:  # pragma: no cover - PyYAML nodes are scalar/sequence/mapping here.
-        value = None
-    return {"__ha_tag__": f"!{tag_suffix}", "value": value}
-
-
-DashboardLoader.add_multi_constructor("!", _construct_unknown_tag)
-
-
-def _load_yaml_mapping(text: str) -> dict[str, Any]:
-    payload = yaml.load(text, Loader=DashboardLoader)
-    if not isinstance(payload, dict):
-        raise ValueError("dashboard YAML root is not a mapping")
-    return payload
-
-
-def _card_metrics(card: Any) -> dict[str, int | set[str]]:
-    metrics: dict[str, int | set[str]] = {
-        "cards": 0,
-        "horizontal_stack_cards": 0,
-        "vertical_stack_cards": 0,
-        "grid_cards": 0,
-        "conditional_cards": 0,
-        "custom_cards": 0,
-        "custom_types": set(),
-    }
-    if not isinstance(card, dict):
-        return metrics
-
-    metrics["cards"] = 1
-    card_type = card.get("type")
-    if isinstance(card_type, str):
-        if card_type == "horizontal-stack":
-            metrics["horizontal_stack_cards"] = 1
-        elif card_type == "vertical-stack":
-            metrics["vertical_stack_cards"] = 1
-        elif card_type == "grid":
-            metrics["grid_cards"] = 1
-        elif card_type == "conditional":
-            metrics["conditional_cards"] = 1
-        if card_type.startswith("custom:"):
-            metrics["custom_cards"] = 1
-            custom_types = metrics["custom_types"]
-            assert isinstance(custom_types, set)
-            custom_types.add(card_type)
-
-    nested: list[Any] = []
-    cards = card.get("cards")
-    if isinstance(cards, list):
-        nested.extend(cards)
-    child = card.get("card")
-    if isinstance(child, dict):
-        nested.append(child)
-
-    for item in nested:
-        child_metrics = _card_metrics(item)
-        for key in (
-            "cards",
-            "horizontal_stack_cards",
-            "vertical_stack_cards",
-            "grid_cards",
-            "conditional_cards",
-            "custom_cards",
-        ):
-            metrics[key] = int(metrics[key]) + int(child_metrics[key])
-        current_types = metrics["custom_types"]
-        child_types = child_metrics["custom_types"]
-        assert isinstance(current_types, set)
-        assert isinstance(child_types, set)
-        current_types.update(child_types)
-
-    return metrics
-
-
-def _merge_metrics(target: dict[str, Any], source: dict[str, Any]) -> None:
-    for key in (
-        "cards",
-        "horizontal_stack_cards",
-        "vertical_stack_cards",
-        "grid_cards",
-        "conditional_cards",
-        "custom_cards",
-    ):
-        target[key] += source[key]
-    target["custom_types"].update(source["custom_types"])
-
-
-def _complexity_class(count: int) -> str:
-    if count <= 10:
-        return "small"
-    if count <= 25:
-        return "medium"
-    if count <= 50:
-        return "large"
-    if count <= 100:
-        return "very-large"
-    return "extreme"
-
-
-def summarize_dashboard(text: str) -> dict[str, Any]:
-    payload = _load_yaml_mapping(text)
-    views = payload.get("views")
-    if not isinstance(views, list) or not views:
-        raise ValueError("dashboard views are not an inline non-empty list")
-
-    totals: dict[str, Any] = {
-        "cards": 0,
-        "sections": 0,
-        "horizontal_stack_cards": 0,
-        "vertical_stack_cards": 0,
-        "grid_cards": 0,
-        "conditional_cards": 0,
-        "custom_cards": 0,
-        "custom_types": set(),
-    }
-    anonymous_views: list[dict[str, Any]] = []
-    largest_section_cards = 0
-
-    for index, view in enumerate(views):
-        if not isinstance(view, dict):
-            raise ValueError("dashboard view is not a mapping")
-
-        view_metrics: dict[str, Any] = {
-            "cards": 0,
-            "sections": 0,
-            "horizontal_stack_cards": 0,
-            "vertical_stack_cards": 0,
-            "grid_cards": 0,
-            "conditional_cards": 0,
-            "custom_cards": 0,
-            "custom_types": set(),
-        }
-
-        cards = view.get("cards")
-        if isinstance(cards, list):
-            for card in cards:
-                _merge_metrics(view_metrics, _card_metrics(card))
-
-        sections = view.get("sections")
-        if isinstance(sections, list):
-            for section in sections:
-                if not isinstance(section, dict):
-                    continue
-                view_metrics["sections"] += 1
-                section_cards = section.get("cards")
-                section_count = 0
-                if isinstance(section_cards, list):
-                    for card in section_cards:
-                        card_metrics = _card_metrics(card)
-                        section_count += int(card_metrics["cards"])
-                        _merge_metrics(view_metrics, card_metrics)
-                largest_section_cards = max(largest_section_cards, section_count)
-
-        _merge_metrics(totals, view_metrics)
-        totals["sections"] += view_metrics["sections"]
-
-        anonymous_views.append(
-            {
-                "view": f"view_{index:02d}",
-                "cards": view_metrics["cards"],
-                "sections": view_metrics["sections"],
-                "stack_cards": (
-                    view_metrics["horizontal_stack_cards"]
-                    + view_metrics["vertical_stack_cards"]
-                ),
-                "custom_cards": view_metrics["custom_cards"],
-                "complexity": _complexity_class(view_metrics["cards"]),
-            }
-        )
-
-    line_count = len(text.splitlines())
-    include_count = text.count("!include")
-    largest_view_cards = max(item["cards"] for item in anonymous_views)
-
-    custom_types = totals.pop("custom_types")
-    assert isinstance(custom_types, set)
-
-    return {
-        "line_count": line_count,
-        "view_count": len(views),
-        "section_count": totals["sections"],
-        "card_count": totals["cards"],
-        "horizontal_stack_card_count": totals["horizontal_stack_cards"],
-        "vertical_stack_card_count": totals["vertical_stack_cards"],
-        "grid_card_count": totals["grid_cards"],
-        "conditional_card_count": totals["conditional_cards"],
-        "custom_card_count": totals["custom_cards"],
-        "distinct_custom_card_type_count": len(custom_types),
-        "include_directive_count": include_count,
-        "largest_view_card_count": largest_view_cards,
-        "largest_view_complexity": _complexity_class(largest_view_cards),
-        "largest_section_card_count": largest_section_cards,
-        "largest_section_complexity": _complexity_class(largest_section_cards),
-        "views": anonymous_views,
-    }
-
 
 RUNTIME_PROBE = r'''
 import json
@@ -286,6 +74,181 @@ def bounded_path(raw):
     return resolved
 
 
+def card_metrics(card):
+    metrics = {
+        "cards": 0,
+        "horizontal_stack_cards": 0,
+        "vertical_stack_cards": 0,
+        "grid_cards": 0,
+        "conditional_cards": 0,
+        "custom_cards": 0,
+        "custom_types": set(),
+    }
+    if not isinstance(card, dict):
+        return metrics
+
+    metrics["cards"] = 1
+    card_type = card.get("type")
+    if isinstance(card_type, str):
+        if card_type == "horizontal-stack":
+            metrics["horizontal_stack_cards"] = 1
+        elif card_type == "vertical-stack":
+            metrics["vertical_stack_cards"] = 1
+        elif card_type == "grid":
+            metrics["grid_cards"] = 1
+        elif card_type == "conditional":
+            metrics["conditional_cards"] = 1
+        if card_type.startswith("custom:"):
+            metrics["custom_cards"] = 1
+            metrics["custom_types"].add(card_type)
+
+    nested = []
+    if isinstance(card.get("cards"), list):
+        nested.extend(card["cards"])
+    if isinstance(card.get("card"), dict):
+        nested.append(card["card"])
+
+    for child in nested:
+        child_metrics = card_metrics(child)
+        for key in (
+            "cards",
+            "horizontal_stack_cards",
+            "vertical_stack_cards",
+            "grid_cards",
+            "conditional_cards",
+            "custom_cards",
+        ):
+            metrics[key] += child_metrics[key]
+        metrics["custom_types"].update(child_metrics["custom_types"])
+
+    return metrics
+
+
+def merge_metrics(target, source):
+    for key in (
+        "cards",
+        "horizontal_stack_cards",
+        "vertical_stack_cards",
+        "grid_cards",
+        "conditional_cards",
+        "custom_cards",
+    ):
+        target[key] += source[key]
+    target["custom_types"].update(source["custom_types"])
+
+
+def complexity(count):
+    if count <= 10:
+        return "small"
+    if count <= 25:
+        return "medium"
+    if count <= 50:
+        return "large"
+    if count <= 100:
+        return "very-large"
+    return "extreme"
+
+
+def summarize_dashboard(text):
+    try:
+        payload = yaml.load(text, Loader=DashboardLoader)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    views = payload.get("views")
+    if not isinstance(views, list) or not views:
+        return None
+
+    totals = {
+        "cards": 0,
+        "sections": 0,
+        "horizontal_stack_cards": 0,
+        "vertical_stack_cards": 0,
+        "grid_cards": 0,
+        "conditional_cards": 0,
+        "custom_cards": 0,
+        "custom_types": set(),
+    }
+    anonymous_views = []
+    largest_section_cards = 0
+
+    for index, view in enumerate(views):
+        if not isinstance(view, dict):
+            return None
+
+        current = {
+            "cards": 0,
+            "sections": 0,
+            "horizontal_stack_cards": 0,
+            "vertical_stack_cards": 0,
+            "grid_cards": 0,
+            "conditional_cards": 0,
+            "custom_cards": 0,
+            "custom_types": set(),
+        }
+
+        cards = view.get("cards")
+        if isinstance(cards, list):
+            for card in cards:
+                merge_metrics(current, card_metrics(card))
+
+        sections = view.get("sections")
+        if isinstance(sections, list):
+            for section in sections:
+                if not isinstance(section, dict):
+                    continue
+                current["sections"] += 1
+                section_card_count = 0
+                section_cards = section.get("cards")
+                if isinstance(section_cards, list):
+                    for card in section_cards:
+                        metrics = card_metrics(card)
+                        section_card_count += metrics["cards"]
+                        merge_metrics(current, metrics)
+                largest_section_cards = max(
+                    largest_section_cards,
+                    section_card_count,
+                )
+
+        merge_metrics(totals, current)
+        totals["sections"] += current["sections"]
+        anonymous_views.append(
+            {
+                "view": "view_%02d" % index,
+                "cards": current["cards"],
+                "sections": current["sections"],
+                "stack_cards": (
+                    current["horizontal_stack_cards"]
+                    + current["vertical_stack_cards"]
+                ),
+                "custom_cards": current["custom_cards"],
+                "complexity": complexity(current["cards"]),
+            }
+        )
+
+    largest_view_cards = max(item["cards"] for item in anonymous_views)
+    return {
+        "line_count": len(text.splitlines()),
+        "view_count": len(views),
+        "section_count": totals["sections"],
+        "card_count": totals["cards"],
+        "horizontal_stack_card_count": totals["horizontal_stack_cards"],
+        "vertical_stack_card_count": totals["vertical_stack_cards"],
+        "grid_card_count": totals["grid_cards"],
+        "conditional_card_count": totals["conditional_cards"],
+        "custom_card_count": totals["custom_cards"],
+        "distinct_custom_card_type_count": len(totals["custom_types"]),
+        "include_directive_count": text.count("!include"),
+        "largest_view_card_count": largest_view_cards,
+        "largest_view_complexity": complexity(largest_view_cards),
+        "largest_section_card_count": largest_section_cards,
+        "largest_section_complexity": complexity(largest_section_cards),
+        "views": anonymous_views,
+    }
+
+
 config, _ = load_mapping(CONFIG_ROOT / "configuration.yaml")
 if config is None:
     print(json.dumps({"resolved": False, "reason": "CONFIGURATION_UNREADABLE"}))
@@ -314,8 +277,7 @@ for definition in dashboards.values():
         continue
     if definition.get("title") != TARGET_TITLE:
         continue
-    filename = definition.get("filename")
-    dashboard_path = bounded_path(filename)
+    dashboard_path = bounded_path(definition.get("filename"))
     if dashboard_path is not None:
         matches.append(dashboard_path)
 
@@ -329,7 +291,30 @@ except (OSError, UnicodeError):
     print(json.dumps({"resolved": False, "reason": "DASHBOARD_UNREADABLE"}))
     raise SystemExit(0)
 
-print(json.dumps({"resolved": True, "dashboard_text": dashboard_text}))
+structure = summarize_dashboard(dashboard_text)
+if structure is None:
+    print(json.dumps({"resolved": True, "reason": "DASHBOARD_STRUCTURE_UNPARSABLE"}))
+    raise SystemExit(0)
+
+print(
+    json.dumps(
+        {
+            "resolved": True,
+            "reason": "",
+            "structure": structure,
+            "privacy": {
+                "dashboard_path_emitted": False,
+                "raw_yaml_emitted": False,
+                "entity_ids_emitted": False,
+                "view_names_or_paths_emitted": False,
+                "card_titles_emitted": False,
+                "custom_card_type_names_emitted": False,
+                "secrets_resolved": False,
+            },
+        },
+        sort_keys=True,
+    )
+)
 '''
 
 
@@ -377,9 +362,7 @@ def running_version(docker: str, container: str) -> str:
     return value
 
 
-def collect_runtime_dashboard(
-    docker: str, container: str, title: str
-) -> tuple[bool, str, str | None]:
+def collect_runtime_probe(docker: str, container: str, title: str) -> dict[str, Any]:
     result = _run(
         [docker, "exec", "-i", container, "python", "-", title],
         input_text=RUNTIME_PROBE,
@@ -391,20 +374,11 @@ def collect_runtime_dashboard(
         raise RuntimeError("live dashboard structure probe returned invalid JSON") from exc
     if not isinstance(decoded, dict):
         raise RuntimeError("live dashboard structure probe returned unexpected data")
-    resolved = decoded.get("resolved") is True
-    reason = decoded.get("reason") if isinstance(decoded.get("reason"), str) else ""
-    text = decoded.get("dashboard_text") if isinstance(decoded.get("dashboard_text"), str) else None
-    return resolved, reason, text
+    return decoded
 
 
 def build_report(
-    *,
-    sha: str,
-    expected: str,
-    running: str,
-    resolved: bool,
-    resolution_reason: str,
-    dashboard_text: str | None,
+    *, sha: str, expected: str, running: str, probe: dict[str, Any]
 ) -> dict[str, Any]:
     reasons: list[str] = []
     hard_block = False
@@ -413,27 +387,27 @@ def build_report(
         reasons.append("HOME_ASSISTANT_VERSION_MISMATCH")
         hard_block = True
 
-    structure: dict[str, Any] = {}
-    if not resolved or dashboard_text is None:
-        reasons.append(resolution_reason or "DASHBOARD_NOT_RESOLVED")
+    resolved = probe.get("resolved") is True
+    structure = probe.get("structure") if isinstance(probe.get("structure"), dict) else {}
+    reason = probe.get("reason") if isinstance(probe.get("reason"), str) else ""
+
+    if not resolved:
+        reasons.append(reason or "DASHBOARD_NOT_RESOLVED")
         hard_block = True
-    else:
-        try:
-            structure = summarize_dashboard(dashboard_text)
-        except (ValueError, yaml.YAMLError):
-            reasons.append("DASHBOARD_STRUCTURE_UNPARSABLE")
+    elif not structure:
+        reasons.append(reason or "DASHBOARD_STRUCTURE_UNPARSABLE")
 
-    privacy = {
-        "dashboard_path_emitted": False,
-        "raw_yaml_emitted": False,
-        "entity_ids_emitted": False,
-        "view_names_or_paths_emitted": False,
-        "card_titles_emitted": False,
-        "custom_card_type_names_emitted": False,
-        "secrets_resolved": False,
-    }
-
-    if any(privacy.values()):
+    privacy = probe.get("privacy") if isinstance(probe.get("privacy"), dict) else {}
+    expected_false = (
+        "dashboard_path_emitted",
+        "raw_yaml_emitted",
+        "entity_ids_emitted",
+        "view_names_or_paths_emitted",
+        "card_titles_emitted",
+        "custom_card_type_names_emitted",
+        "secrets_resolved",
+    )
+    if any(privacy.get(key) is not False for key in expected_false):
         reasons.append("PRIVACY_GUARD_FAILED")
         hard_block = True
 
@@ -480,44 +454,40 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def blocked_report() -> dict[str, Any]:
+    return {
+        "schema": 1,
+        "decision": "BLOCKED",
+        "reasons": ["AUDIT_EXECUTION_FAILED"],
+        "privacy": {
+            "dashboard_path_emitted": False,
+            "raw_yaml_emitted": False,
+            "entity_ids_emitted": False,
+            "view_names_or_paths_emitted": False,
+            "card_titles_emitted": False,
+            "custom_card_type_names_emitted": False,
+            "secrets_resolved": False,
+        },
+        "mutation": {
+            "home_assistant_write": False,
+            "dashboard_write": False,
+            "storage_write": False,
+            "reload_or_restart": False,
+        },
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        expected = expected_version()
-        running = running_version(args.docker, args.container)
-        sha = source_sha()
-        resolved, reason, dashboard_text = collect_runtime_dashboard(
-            args.docker, args.container, args.dashboard_title
-        )
         report = build_report(
-            sha=sha,
-            expected=expected,
-            running=running,
-            resolved=resolved,
-            resolution_reason=reason,
-            dashboard_text=dashboard_text,
+            sha=source_sha(),
+            expected=expected_version(),
+            running=running_version(args.docker, args.container),
+            probe=collect_runtime_probe(args.docker, args.container, args.dashboard_title),
         )
     except (OSError, RuntimeError):
-        report = {
-            "schema": 1,
-            "decision": "BLOCKED",
-            "reasons": ["AUDIT_EXECUTION_FAILED"],
-            "privacy": {
-                "dashboard_path_emitted": False,
-                "raw_yaml_emitted": False,
-                "entity_ids_emitted": False,
-                "view_names_or_paths_emitted": False,
-                "card_titles_emitted": False,
-                "custom_card_type_names_emitted": False,
-                "secrets_resolved": False,
-            },
-            "mutation": {
-                "home_assistant_write": False,
-                "dashboard_write": False,
-                "storage_write": False,
-                "reload_or_restart": False,
-            },
-        }
+        report = blocked_report()
 
     rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output is not None:
