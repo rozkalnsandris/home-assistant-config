@@ -28,9 +28,7 @@ DUMMY_PRIVATE_FILES = {
 sensor.ci_placeholder:
   friendly_name: CI Placeholder
 """,
-    "private/http.yaml": """\
-use_x_forwarded_for: false
-""",
+    "private/http.yaml": "{}\n",
     "private/lovelace.yaml": """\
 mode: storage
 """,
