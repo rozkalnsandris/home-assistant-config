@@ -10,9 +10,16 @@ This repository is intentionally separate from `rozkalnsandris/RPi5_main`:
 
 ## Current status
 
-Repository safety foundation is merged. Phase 2 adds a **read-only local inventory** tool for the live Home Assistant `/config` directory so we can identify the exact production Home Assistant version, classify top-level config items and locate the YAML source behind the `Mājas YAML` dashboard before importing anything.
+Repository safety foundation and read-only live inventory are complete. The reviewed production baseline is Home Assistant `2026.8.2`, and the YAML-backed `Mājas YAML` source is known privately.
 
-No live Home Assistant configuration has been imported or changed yet.
+The first bounded public-safe source import is merged:
+
+- generic audited `automations.yaml`;
+- current empty `scripts.yaml`;
+- current empty `scenes.yaml`;
+- sanitized dependency/provenance documentation.
+
+Private production `configuration.yaml`, `dashboards/majas.yaml`, heater/cost packages, private entity/location bindings, secrets, runtime state and generated third-party code remain outside public Git until their separate review gates are complete.
 
 ## Public repository safety boundary
 
@@ -42,15 +49,13 @@ A merge never deploys automatically. GitHub Actions in this repository are valid
 
 ## Validation model
 
-CI validates repository policy, YAML syntax, inventory tooling unit tests and reachable Git history for obvious secret material. After the live Home Assistant version is inventoried, validation will be pinned to that exact version and include Home Assistant's supported configuration check before any production apply.
+The production Home Assistant release is pinned in `home-assistant-version.txt`.
 
-Home Assistant's container documentation uses:
+CI builds an isolated fixture from the currently published `automations.yaml`, `scripts.yaml` and `scenes.yaml` only, then runs Home Assistant's official `check_config` command with `--fail-on-warnings` against the exact pinned release. CI never validates against `latest`.
 
-```text
-docker exec homeassistant python -m homeassistant --script check_config --config /config
-```
+This is intentionally **public-subset validation**, not proof that excluded production-private configuration is valid. A complete production candidate still requires a separate private binding/import gate and full exact-version validation before apply.
 
-The future CI equivalent must run against an isolated candidate configuration, never against production.
+See [Exact-version validation](docs/VALIDATION.md).
 
 ## Documentation
 
@@ -58,10 +63,10 @@ The future CI equivalent must run against an isolated candidate configuration, n
 - [Dependencies](docs/DEPENDENCIES.md)
 - [Deployment contract](docs/DEPLOYMENT.md)
 - [Read-only live inventory](docs/LIVE_INVENTORY.md)
+- [Exact-version validation](docs/VALIDATION.md)
 - [Repository operating rules](AGENTS.md)
 - [Bootstrap roadmap](../../issues/1)
-- [Phase 2 inventory issue](../../issues/4)
 
 ## Production impact
 
-**Production deploy/change: NO** for repository/inventory tooling changes.
+**Production deploy/change: NO** for repository, audit and validation-only changes.
