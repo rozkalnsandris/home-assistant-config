@@ -10,6 +10,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+# The live validator is normally invoked through sudo. Prevent imports from creating
+# root-owned __pycache__ directories inside a user-owned temporary checkout.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -174,6 +178,15 @@ def write_output(data: dict, output: Path) -> None:
     output.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def resolved_output(*, stdout: bool, output: Path | None) -> Path | None:
+    """Avoid repository writes for the normal sudo + --stdout operator path."""
+    if output is not None:
+        return output
+    if stdout:
+        return None
+    return DEFAULT_OUTPUT
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -184,7 +197,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--container", help="Explicit running Home Assistant container name")
     parser.add_argument("--docker", default="docker")
     parser.add_argument("--ip", dest="ip_cmd", default="ip")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Optional sanitized JSON output path. With --stdout and no explicit "
+            "--output, no file is written."
+        ),
+    )
     parser.add_argument("--stdout", action="store_true")
     return parser.parse_args()
 
@@ -193,12 +213,15 @@ def main() -> int:
     args = parse_args()
     try:
         data = audit(docker=args.docker, ip_cmd=args.ip_cmd, container=args.container)
-        write_output(data, args.output)
+        output = resolved_output(stdout=args.stdout, output=args.output)
+        if output is not None:
+            write_output(data, output)
     except (OSError, RuntimeError) as exc:
         print(f"Trusted-proxy candidate validation failed: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Sanitized candidate validation written to: {args.output}", file=sys.stderr)
+    if output is not None:
+        print(f"Sanitized candidate validation written to: {output}", file=sys.stderr)
     if args.stdout:
         print(json.dumps(data, indent=2, sort_keys=True))
     return 0

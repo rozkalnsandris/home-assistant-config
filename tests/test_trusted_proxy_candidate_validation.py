@@ -26,6 +26,27 @@ class DockerCommandTests(unittest.TestCase):
         self.assertIn("sha256:" + "a" * 64, command)
 
 
+class OperatorOutputTests(unittest.TestCase):
+    def test_stdout_only_does_not_write_inside_repository(self) -> None:
+        self.assertIsNone(validator.resolved_output(stdout=True, output=None))
+
+    def test_explicit_output_is_preserved_with_stdout(self) -> None:
+        output = Path("/tmp/candidate-result.json")
+        self.assertEqual(
+            validator.resolved_output(stdout=True, output=output),
+            output,
+        )
+
+    def test_non_stdout_keeps_default_sanitized_evidence_file(self) -> None:
+        self.assertEqual(
+            validator.resolved_output(stdout=False, output=None),
+            validator.DEFAULT_OUTPUT,
+        )
+
+    def test_bytecode_writes_are_disabled_for_sudo_operator_path(self) -> None:
+        self.assertTrue(validator.sys.dont_write_bytecode)
+
+
 class SanitizedResultTests(unittest.TestCase):
     def test_success_never_emits_candidate_address(self) -> None:
         result = validator.build_result(

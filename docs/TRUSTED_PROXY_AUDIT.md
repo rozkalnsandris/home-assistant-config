@@ -99,8 +99,12 @@ The real private address stays outside Git. Historical journal evidence or a suc
 Before any production apply, validate the private single-host candidate against the already-running Home Assistant image:
 
 ```bash
-sudo python tools/validate_trusted_proxy_candidate.py --stdout
+sudo python -B tools/validate_trusted_proxy_candidate.py --stdout
 ```
+
+The normal `--stdout` operator path deliberately writes no file into the repository. This matters when the command is run through `sudo` from a temporary user-owned checkout: no root-owned `exports/` or Python bytecode directory is left behind to break cleanup. Bytecode writes are also disabled in the validator before repository modules are imported.
+
+If persistent sanitized evidence is explicitly needed, pass `--output <path>` and choose an ownership/location model appropriate for that host rather than relying on the repository default from a sudo-run temporary checkout.
 
 The validator:
 
@@ -115,6 +119,8 @@ The validator:
 - emits only sanitized pass/fail metadata.
 
 `VALIDATED_FOR_PREPRODUCTION` means the exact single-host candidate shape is accepted by the exact running Home Assistant version. It does **not** prove remote/local access behavior and does not authorize modifying the live `http` configuration.
+
+The first exact-main RPi5 execution produced `VALIDATED_FOR_PREPRODUCTION` against Home Assistant `2026.8.2`. The validation itself passed; a later temporary-checkout cleanup failure was traced only to root-owned repository artifacts created by the old sudo invocation pattern. That operator-cleanup defect did not touch the production Home Assistant configuration or container and is addressed by the stdout-only behavior above.
 
 A green audit or candidate validation does **not** authorize production mutation. Before apply, the full private production candidate still requires backup/rollback preparation, exact Git revision binding, remote-path verification and LAN break-glass verification. Any restart or live `http` change requires separate explicit owner authorization.
 
