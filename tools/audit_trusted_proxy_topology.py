@@ -11,9 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from inventory_home_assistant import running_containers, select_container
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.inventory_home_assistant import running_containers, select_container
+
 DEFAULT_OUTPUT = ROOT / "exports" / "trusted-proxy-audit.json"
 HA_HOSTNAME = "ha.rozkalns.net"
 HA_PORT = 8123
