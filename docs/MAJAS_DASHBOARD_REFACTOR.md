@@ -57,6 +57,51 @@ The report must not emit:
 
 A successful inventory returns `READY_FOR_SPLIT_DESIGN`. `NEEDS_REVIEW` means the dashboard was found but its current shape needs a narrower classifier before migration. `BLOCKED` means version/binding/privacy evidence is not safe enough to proceed.
 
+## Phase 2A exact split plan
+
+The completed Phase 1 live inventory established the exact sanitized baseline:
+
+- 1 view;
+- 3 sections;
+- 12 cards;
+- 11 custom-card instances;
+- 1 distinct custom-card type;
+- 0 horizontal stacks;
+- 0 vertical stacks;
+- 0 existing include directives.
+
+This dashboard is line-heavy rather than structurally broad. Phase 2A therefore keeps the existing single view and splits only at the view/section boundaries:
+
+```text
+<private-dashboard-root>/
+├── dashboard.yaml
+├── views/
+│   └── 00_view.yaml
+└── sections/
+    └── view_00/
+        ├── 00_section.yaml
+        ├── 10_section.yaml
+        └── 20_section.yaml
+```
+
+Keep `views/` and `sections/` as sibling directories. `!include_dir_list` processes matching files recursively, so putting section files under the `views/` directory would risk adding those section objects to the dashboard-level views list.
+
+The intended private candidate uses:
+
+- dashboard root: existing dashboard-level keys unchanged, with `views` replaced by an ordered `!include_dir_list` of `views/`;
+- view file: existing view-level keys unchanged, with `sections` replaced by an ordered `!include_dir_list` of `sections/view_00/`;
+- section files: exactly one existing section object per ordered file, preserving card content and order.
+
+Do not create one file per card. Do not redesign layout, rename view metadata, alter entities, deduplicate card configuration, change custom-card dependencies, or modernize grid behavior in Phase 2A.
+
+`tools/plan_majas_dashboard_split.py` is intentionally read-only. It loads a private dashboard, constructs the proposed split entirely in memory, reassembles it, and emits only sanitized counts and equivalence booleans. It never writes the private split tree. The exact reviewed baseline is fail-closed: 1 view / 3 sections / 12 cards / 11 custom cards / 1 custom-card type.
+
+Expected successful decision:
+
+`READY_FOR_PRIVATE_CANDIDATE_GATE`
+
+That decision authorizes only a later separately owner-gated candidate-creation step; it does not authorize a live `/config` write, dashboard rebinding, reload, or restart.
+
 ## Production boundary
 
 This roadmap, its audit tooling and source-only split PRs do not authorize any live dashboard write, reload or Home Assistant restart. Production cutover requires a fresh backup/rollback gate, exact-version validation and explicit owner authorization.
