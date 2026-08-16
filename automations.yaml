@@ -1,0 +1,91 @@
+- id: '1779487153101'
+  alias: Brīdināt par atvērtu logu aukstā laikā
+  description: ''
+  triggers:
+    - value_template: >-
+        {{ states.binary_sensor
+           | selectattr('attributes.device_class','eq','opening')
+           | selectattr('state','eq','on') | list | count > 0 }}
+      for:
+        minutes: 10
+      trigger: template
+  conditions:
+    - condition: template
+      value_template: >-
+        {% set w = states.weather | list %}
+        {{ w and w[0].attributes.temperature < 15 }}
+  actions:
+    - data:
+        message: >-
+          ⚠️ Atvērti {{ states.binary_sensor
+          | selectattr('attributes.device_class','eq','opening')
+          | selectattr('state','eq','on')
+          | map(attribute='name') | join(', ') }} jau 10 min., bet ārā tikai
+          {{ state_attr(states.weather | map(attribute='entity_id') | first,
+          'temperature') }}°C
+      action: notify.telegram
+  mode: single
+
+- id: '1779487174945'
+  alias: Izslēgt termostatus, kad logi atvērti
+  description: ''
+  triggers:
+    - value_template: >-
+        {{ states.binary_sensor
+           | selectattr('attributes.device_class','eq','opening')
+           | selectattr('state','eq','on') | list | count > 0 }}
+      for:
+        minutes: 2
+      trigger: template
+  actions:
+    - target:
+        entity_id: >-
+          {{ states.climate
+             | rejectattr('state','eq','unavailable')
+             | map(attribute='entity_id') | list }}
+      data:
+        hvac_mode: 'off'
+      action: climate.set_hvac_mode
+  mode: single
+
+- id: '1779487192647'
+  alias: Ieslēgt termostatus, kad visi logi aizvērti
+  description: ''
+  triggers:
+    - value_template: >-
+        {{ states.binary_sensor
+           | selectattr('attributes.device_class','eq','opening')
+           | selectattr('state','eq','on') | list | count == 0 }}
+      for:
+        minutes: 1
+      trigger: template
+  actions:
+    - target:
+        entity_id: >-
+          {{ states.climate
+             | rejectattr('state','eq','unavailable')
+             | map(attribute='entity_id') | list }}
+      data:
+        hvac_mode: heat
+      action: climate.set_hvac_mode
+  mode: single
+
+- id: '1779487217362'
+  alias: Brīdināt par offline TP-Link ierīci
+  description: ''
+  triggers:
+    - value_template: >-
+        {{ expand(integration_entities('tplink'))
+           | selectattr('state','eq','unavailable')
+           | list | count > 0 }}
+      for:
+        minutes: 5
+      trigger: template
+  actions:
+    - data:
+        message: >-
+          ⚠️ Offline ierīces: {{ expand(integration_entities('tplink'))
+          | selectattr('state','eq','unavailable')
+          | map(attribute='name') | join(', ') }}
+      action: notify.telegram
+  mode: single
