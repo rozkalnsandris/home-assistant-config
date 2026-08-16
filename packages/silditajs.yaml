@@ -1,20 +1,7 @@
 input_boolean:
-  silditajs_grafiks:
-    name: Sildītāja grafiks
-    icon: mdi:calendar-clock
   silditajs_taimeris:
     name: Sildītāja taimeris
     icon: mdi:timer-outline
-
-input_datetime:
-  silditajs_ieslegt:
-    name: Ieslēgt
-    has_date: false
-    has_time: true
-  silditajs_izslegt:
-    name: Izslēgt
-    has_date: false
-    has_time: true
 
 input_number:
   silditajs_taimeris_min:
@@ -28,34 +15,6 @@ input_number:
     mode: slider
 
 automation:
-  - alias: Sildītājs grafiks IESLĒGT
-    id: silditajs_grafiks_on
-    trigger:
-      - platform: time
-        at: input_datetime.silditajs_ieslegt
-    condition:
-      - condition: state
-        entity_id: input_boolean.silditajs_grafiks
-        state: "on"
-    action:
-      - service: switch.turn_on
-        target:
-          entity_id: !secret heater_switch_entity
-
-  - alias: Sildītājs grafiks IZSLĒGT
-    id: silditajs_grafiks_off
-    trigger:
-      - platform: time
-        at: input_datetime.silditajs_izslegt
-    condition:
-      - condition: state
-        entity_id: input_boolean.silditajs_grafiks
-        state: "on"
-    action:
-      - service: switch.turn_off
-        target:
-          entity_id: !secret heater_switch_entity
-
   - alias: Sildītājs auto-izslēgšanās
     id: silditajs_auto_off
     trigger:
