@@ -10,22 +10,17 @@ This repository is intentionally separate from `rozkalnsandris/RPi5_main`:
 
 ## Current status
 
-Repository safety foundation and read-only live inventory are complete. The reviewed production baseline is Home Assistant `2026.8.2`, and the YAML-backed `Mājas YAML` source is known privately.
+Repository safety foundation, read-only live inventory and exact-version validation are complete. The reviewed production baseline is Home Assistant `2026.8.2`.
 
-The first bounded public-safe source import is merged:
+Public Git now contains the audited generic automations/scripts/scenes plus the sanitized core configuration/package structure. Complex household-specific mappings are referenced through local-only `private/*.yaml`; scalar private package values use Home Assistant `!secret` bindings. Neutral examples document the expected local shape without publishing the real values.
 
-- generic audited `automations.yaml`;
-- current empty `scripts.yaml`;
-- current empty `scenes.yaml`;
-- sanitized dependency/provenance documentation.
-
-Private production `configuration.yaml`, `dashboards/majas.yaml`, heater/cost packages, private entity/location bindings, secrets, runtime state and generated third-party code remain outside public Git until their separate review gates are complete.
+The real YAML dashboard source, real reverse-proxy trust list, real household entity bindings, secrets, unresolved theme provenance, runtime state and generated third-party code remain outside public Git.
 
 ## Public repository safety boundary
 
 Assume every committed byte, commit, PR, issue and Actions log can be read by anyone.
 
-Never commit real `secrets.yaml`, `.storage/`, authentication/session/token material, recorder databases, logs, backups, private keys/certificates, caches, credential-bearing URLs or private media/camera snapshots. Avoid publishing unnecessary private runtime coordinates, device identifiers or household metadata even when they are not credentials.
+Never commit real `secrets.yaml`, `private/`, `.storage/`, authentication/session/token material, recorder databases, logs, backups, private keys/certificates, caches, credential-bearing URLs or private media/camera snapshots. Avoid publishing unnecessary private runtime coordinates, device identifiers or household metadata even when they are not credentials.
 
 A file is not safe merely because Home Assistant accepts it. Public-safe review is a separate gate before import.
 
@@ -51,11 +46,11 @@ A merge never deploys automatically. GitHub Actions in this repository are valid
 
 The production Home Assistant release is pinned in `home-assistant-version.txt`.
 
-CI builds an isolated fixture from the currently published `automations.yaml`, `scripts.yaml` and `scenes.yaml` only, then runs Home Assistant's official `check_config` command with `--fail-on-warnings` against the exact pinned release. CI never validates against `latest`.
+CI creates a fresh fixture from a hard allowlist of public source, injects neutral dummy private bindings and typed dummy secret values, and runs Home Assistant's official `check_config --fail-on-warnings` against the exact pinned release. CI never reads production-private files and never validates against `latest`.
 
-This is intentionally **public-subset validation**, not proof that excluded production-private configuration is valid. A complete production candidate still requires a separate private binding/import gate and full exact-version validation before apply.
+This is intentionally **public-structure validation**, not proof that the real private bindings are correct. A complete production candidate still requires a separate local private-binding validation gate before apply.
 
-See [Exact-version validation](docs/VALIDATION.md).
+See [Exact-version validation](docs/VALIDATION.md) and [Private binding contract](docs/PRIVATE_BINDINGS.md).
 
 ## Documentation
 
@@ -64,6 +59,7 @@ See [Exact-version validation](docs/VALIDATION.md).
 - [Deployment contract](docs/DEPLOYMENT.md)
 - [Read-only live inventory](docs/LIVE_INVENTORY.md)
 - [Exact-version validation](docs/VALIDATION.md)
+- [Private binding contract](docs/PRIVATE_BINDINGS.md)
 - [Repository operating rules](AGENTS.md)
 - [Bootstrap roadmap](../../issues/1)
 

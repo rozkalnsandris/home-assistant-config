@@ -1,0 +1,20 @@
+# Electricity-cost helpers. Real values live only in secrets.yaml.
+input_number:
+  elektribas_cena:
+    name: Elektrības cena
+    min: 0
+    max: 2
+    step: 0.0001
+    mode: box
+    unit_of_measurement: "€/kWh"
+    icon: mdi:cash
+    initial: !secret electricity_price_per_kwh
+  elektribas_fiksetas:
+    name: Fiksētās maksas (mēnesī)
+    min: 0
+    max: 200
+    step: 0.01
+    mode: box
+    unit_of_measurement: "€"
+    icon: mdi:cash-multiple
+    initial: !secret electricity_fixed_monthly

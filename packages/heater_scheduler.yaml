@@ -1,0 +1,136 @@
+# Sildītāja grafiks v3 — public logic with local-only bindings.
+
+template:
+  - sensor:
+      - name: "Heater Sched Hour"
+        unique_id: heater_sched_hour_sensor
+        state: "{{ states('input_datetime.heater_sched_on_time')[0:2] }}"
+        availability: >-
+          {{ states('input_datetime.heater_sched_on_time')
+             not in ['unknown', 'unavailable'] }}
+      - name: "Heater Sched Minute"
+        unique_id: heater_sched_minute_sensor
+        state: "{{ states('input_datetime.heater_sched_on_time')[3:5] }}"
+        availability: >-
+          {{ states('input_datetime.heater_sched_on_time')
+             not in ['unknown', 'unavailable'] }}
+
+input_boolean:
+  heater_sched_mon:
+    name: "Sildītājs grafiks - Pirmdiena"
+    icon: mdi:calendar
+  heater_sched_tue:
+    name: "Sildītājs grafiks - Otrdiena"
+    icon: mdi:calendar
+  heater_sched_wed:
+    name: "Sildītājs grafiks - Trešdiena"
+    icon: mdi:calendar
+  heater_sched_thu:
+    name: "Sildītājs grafiks - Ceturtdiena"
+    icon: mdi:calendar
+  heater_sched_fri:
+    name: "Sildītājs grafiks - Piektdiena"
+    icon: mdi:calendar
+  heater_sched_sat:
+    name: "Sildītājs grafiks - Sestdiena"
+    icon: mdi:calendar
+  heater_sched_sun:
+    name: "Sildītājs grafiks - Svētdiena"
+    icon: mdi:calendar
+
+input_datetime:
+  heater_sched_on_time:
+    name: "Sildītājs grafiks - Laiks"
+    has_date: false
+    has_time: true
+    initial: !secret heater_schedule_initial_time
+
+input_select:
+  heater_sched_action:
+    name: "Sildītājs grafiks - Darbība"
+    icon: mdi:power
+    options:
+      - "Ieslēgt"
+      - "Izslēgt"
+    initial: "Ieslēgt"
+
+script:
+  heater_sched_save:
+    alias: "Saglabāt sildītāja grafiku"
+    icon: mdi:content-save-clock
+    mode: single
+    sequence:
+      - variables:
+          heater_entity: !secret heater_switch_entity
+          weekdays: >-
+            {{ ([
+              'mon' if is_state('input_boolean.heater_sched_mon', 'on') else None,
+              'tue' if is_state('input_boolean.heater_sched_tue', 'on') else None,
+              'wed' if is_state('input_boolean.heater_sched_wed', 'on') else None,
+              'thu' if is_state('input_boolean.heater_sched_thu', 'on') else None,
+              'fri' if is_state('input_boolean.heater_sched_fri', 'on') else None,
+              'sat' if is_state('input_boolean.heater_sched_sat', 'on') else None,
+              'sun' if is_state('input_boolean.heater_sched_sun', 'on') else None
+            ] | select('string') | list) }}
+          on_t: "{{ states('input_datetime.heater_sched_on_time') }}"
+          is_on: "{{ is_state('input_select.heater_sched_action', 'Ieslēgt') }}"
+      - choose:
+          - conditions: "{{ weekdays | length == 0 }}"
+            sequence:
+              - service: persistent_notification.create
+                data:
+                  title: "Sildītāja grafiks"
+                  message: >-
+                    Nav izvēlēta neviena diena — grafiks netika saglabāts.
+              - stop: "Nav izvēlētu dienu"
+      - service: scheduler.add
+        data:
+          weekdays: "{{ weekdays }}"
+          timeslots: >-
+            {{ [
+              {
+                'start': on_t,
+                'actions': [
+                  {
+                    'entity_id': heater_entity,
+                    'service': (
+                      'switch.turn_on' if is_on else 'switch.turn_off'
+                    )
+                  }
+                ]
+              }
+            ] }}
+          repeat_type: repeat
+          name: >-
+            Sildītājs {{ 'ON' if is_on else 'OFF' }} {{ on_t[0:5] }} |
+            {% set d={
+              'mon':'Pi','tue':'Ot','wed':'Tr','thu':'Ce',
+              'fri':'Pk','sat':'Se','sun':'Sv'
+            } %}
+            {% set ns=namespace(r=[]) %}
+            {% for w in weekdays %}
+              {% set ns.r=ns.r+[d[w]] %}
+            {% endfor %}
+            {{ ns.r|join(' ') }}
+      - service: persistent_notification.create
+        data:
+          title: "Sildītāja grafiks"
+          message: "Grafiks saglabāts ✓"
+
+  heater_sched_time_adjust:
+    alias: "Sildītāja grafiks - laika korekcija"
+    icon: mdi:clock-edit-outline
+    mode: queued
+    max: 10
+    fields:
+      minutes:
+        description: "Minūtes (+/-)"
+        example: "60"
+    sequence:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.heater_sched_on_time
+        data:
+          time: >-
+            {{ (today_at(states('input_datetime.heater_sched_on_time'))
+                + timedelta(minutes=minutes | int)).strftime('%H:%M:%S') }}

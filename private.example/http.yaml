@@ -1,0 +1,4 @@
+# Example only. Trust only the immediate proxy/proxies actually in front of HA.
+use_x_forwarded_for: true
+trusted_proxies:
+  - 192.0.2.10

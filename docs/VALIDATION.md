@@ -12,14 +12,17 @@ CI never validates against `latest`.
 
 ## What CI validates
 
-`tools/build_public_validation_fixture.py` creates a new isolated directory containing only:
+`tools/build_public_validation_fixture.py` creates a fresh isolated candidate from a hard allowlist of tracked public source:
 
+- `configuration.yaml`;
 - `automations.yaml`;
 - `scripts.yaml`;
 - `scenes.yaml`;
-- a deterministic minimal `configuration.yaml` that includes those three files.
+- the three audited public package files under `packages/`.
 
-The builder uses a hard-coded allowlist. It does not enumerate the repository and does not copy `secrets.yaml`, `.storage`, dashboards, packages, themes, custom components, databases, logs, backups, media or any other runtime/private content.
+The public `configuration.yaml` intentionally refers to local-only `private/*.yaml` blocks, and the packages intentionally refer to scalar `!secret` bindings. CI does **not** read those values from the repository or from production. Instead, the fixture builder creates neutral dummy `private/*.yaml`, a dummy typed `secrets.yaml`, and a dummy theme file inside the temporary runner directory.
+
+The builder does not enumerate or copy a real `private/`, real `secrets.yaml`, `.storage`, dashboards, custom components, databases, logs, backups, media or other runtime/private content.
 
 GitHub Actions then pulls:
 
@@ -37,12 +40,12 @@ The resolved container image digest is printed into the Actions log as execution
 
 ## What this does not prove
 
-This gate validates the **published public-safe subset only**. It does not claim that excluded production-private configuration has been validated.
+This gate validates the **published public structure plus neutral CI bindings**. It does not claim that the real production-private binding values are correct.
 
-In particular, it does not validate the private production `configuration.yaml`, `Mājas YAML`, private entity/location bindings, heater/cost packages, HACS runtime state, third-party custom integrations, or secrets.
+In particular, it does not validate the real reverse-proxy trust list, household entity IDs, the real YAML dashboard source, recorder/utility-meter private bindings, HACS runtime state, third-party custom integrations, or real secret values.
 
-Those items require separate private review and, before production apply, a full candidate configuration check using the exact reviewed production bindings.
+Those items require a separate private full-candidate check before production apply.
 
 ## Production boundary
 
-The CI fixture is created only on the GitHub-hosted runner. It has no connection to the live Home Assistant container and cannot reload, restart or mutate production.
+The CI fixture exists only on the GitHub-hosted runner. It has no connection to the live Home Assistant container and cannot reload, restart or mutate production.
