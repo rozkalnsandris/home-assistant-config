@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 
 from tools.materialize_majas_dashboard_candidate import (
+    CandidateError,
     DashboardLoader,
     TaggedValue,
     load_candidate_tree,
@@ -20,12 +21,14 @@ from tools.materialize_majas_dashboard_candidate import (
     structural_counts,
 )
 from tools.plan_majas_dashboard_activation import (
+    ActivationPlanError,
     EXPECTED_CANDIDATE_DIRS,
     EXPECTED_CANDIDATE_FILES,
     resolve_binding_owner,
 )
 from tools.plan_majas_sections_modernization import (
     EXPECTED_AFTER_STRUCTURE,
+    SectionsModernizationPlanError,
     analyze_flattening_plan,
     running_home_assistant_version,
 )
@@ -504,7 +507,12 @@ def prepare_live_apply(
             "mutation": mutation_report(),
         }
         return byte_plan, report
-    except SectionsFlatteningApplyPlanError as exc:
+    except (
+        ActivationPlanError,
+        CandidateError,
+        SectionsFlatteningApplyPlanError,
+        SectionsModernizationPlanError,
+    ) as exc:
         return None, blocked_report(exc.reason)
     except Exception:
         return None, blocked_report("SECTIONS_FLATTENING_APPLY_PREPARE_FAILED")
