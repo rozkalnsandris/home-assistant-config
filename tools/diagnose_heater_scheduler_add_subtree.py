@@ -25,13 +25,17 @@ def _entity_scalar(value: Any) -> bool:
     return isinstance(value, str) and ENTITY_ID.fullmatch(str(value)) is not None
 
 
-def _count_entity_scalars(value: Any) -> int:
+def _count_entity_reference_scalars(value: Any) -> int:
     if _entity_scalar(value):
         return 1
     if isinstance(value, dict):
-        return sum(_count_entity_scalars(item) for item in value.values())
+        return sum(
+            _count_entity_reference_scalars(item)
+            for key, item in value.items()
+            if key not in {"service", "action"}
+        )
     if isinstance(value, list):
-        return sum(_count_entity_scalars(item) for item in value)
+        return sum(_count_entity_reference_scalars(item) for item in value)
     return 0
 
 
@@ -72,7 +76,7 @@ def _action_container_counts(value: Any) -> tuple[int, int, int, int]:
     key_count = 0
     list_count = 0
     mapping_entry_count = 0
-    entity_scalar_count = 0
+    entity_reference_scalar_count = 0
     if isinstance(value, dict):
         for key, item in value.items():
             if key == "actions":
@@ -80,20 +84,20 @@ def _action_container_counts(value: Any) -> tuple[int, int, int, int]:
                 if isinstance(item, list):
                     list_count += 1
                     mapping_entry_count += sum(isinstance(entry, dict) for entry in item)
-                    entity_scalar_count += _count_entity_scalars(item)
+                    entity_reference_scalar_count += _count_entity_reference_scalars(item)
             nested = _action_container_counts(item)
             key_count += nested[0]
             list_count += nested[1]
             mapping_entry_count += nested[2]
-            entity_scalar_count += nested[3]
+            entity_reference_scalar_count += nested[3]
     elif isinstance(value, list):
         for item in value:
             nested = _action_container_counts(item)
             key_count += nested[0]
             list_count += nested[1]
             mapping_entry_count += nested[2]
-            entity_scalar_count += nested[3]
-    return key_count, list_count, mapping_entry_count, entity_scalar_count
+            entity_reference_scalar_count += nested[3]
+    return key_count, list_count, mapping_entry_count, entity_reference_scalar_count
 
 
 def classify_scheduler_add_subtree(config: Any) -> dict[str, Any]:
@@ -110,25 +114,25 @@ def classify_scheduler_add_subtree(config: Any) -> dict[str, Any]:
     add_count = len(add_steps)
 
     data_mapping_count = 0
-    data_entity_scalar_count = 0
+    data_entity_reference_scalar_count = 0
     timeslots_key_count = 0
     timeslots_list_count = 0
     timeslots_string_count = 0
-    timeslots_entity_scalar_count = 0
+    timeslots_entity_reference_scalar_count = 0
     actions_key_count = 0
     actions_list_count = 0
     action_entry_mapping_count = 0
-    actions_entity_scalar_count = 0
+    actions_entity_reference_scalar_count = 0
     entity_id_key_count = 0
     entity_id_scalar_count = 0
-    add_entity_scalar_count = 0
+    add_entity_reference_scalar_count = 0
 
     for step in add_steps:
-        add_entity_scalar_count += _count_entity_scalars(step)
+        add_entity_reference_scalar_count += _count_entity_reference_scalars(step)
         data = step.get("data")
         if isinstance(data, dict):
             data_mapping_count += 1
-            data_entity_scalar_count += _count_entity_scalars(data)
+            data_entity_reference_scalar_count += _count_entity_reference_scalars(data)
             if "timeslots" in data:
                 timeslots_key_count += 1
                 timeslots = data.get("timeslots")
@@ -136,13 +140,15 @@ def classify_scheduler_add_subtree(config: Any) -> dict[str, Any]:
                     timeslots_list_count += 1
                 if isinstance(timeslots, str):
                     timeslots_string_count += 1
-                timeslots_entity_scalar_count += _count_entity_scalars(timeslots)
+                timeslots_entity_reference_scalar_count += _count_entity_reference_scalars(
+                    timeslots
+                )
 
         action_counts = _action_container_counts(step)
         actions_key_count += action_counts[0]
         actions_list_count += action_counts[1]
         action_entry_mapping_count += action_counts[2]
-        actions_entity_scalar_count += action_counts[3]
+        actions_entity_reference_scalar_count += action_counts[3]
 
         id_counts = _entity_id_counts(step)
         entity_id_key_count += id_counts[0]
@@ -160,13 +166,15 @@ def classify_scheduler_add_subtree(config: Any) -> dict[str, Any]:
         reason = "EXPECTED_SEQUENCE_NOT_LIST"
     elif add_count != 1:
         reason = "SCHEDULER_ADD_STEP_NOT_EXACT"
-    elif entity_id_scalar_count == 1:
+    elif entity_id_key_count == 1 and entity_id_scalar_count == 1:
         reason = "UNIQUE_ENTITY_ID_SCALAR_UNDER_SCHEDULER_ADD"
-    elif entity_id_key_count > 0 and entity_id_scalar_count == 0:
+    elif entity_id_key_count > 1:
+        reason = "ENTITY_ID_TARGET_STRUCTURALLY_AMBIGUOUS"
+    elif entity_id_key_count == 1 and entity_id_scalar_count == 0:
         reason = "ENTITY_ID_VALUE_SHAPE_INVALID"
-    elif add_entity_scalar_count == 1:
+    elif add_entity_reference_scalar_count == 1:
         reason = "UNIQUE_ENTITY_SCALAR_UNDER_SCHEDULER_ADD_NO_ENTITY_ID_KEY"
-    elif add_entity_scalar_count > 1:
+    elif add_entity_reference_scalar_count > 1:
         reason = "SCHEDULER_ADD_TARGET_STRUCTURALLY_AMBIGUOUS"
     else:
         reason = "SCHEDULER_ADD_TARGET_NOT_IDENTIFIED"
@@ -179,18 +187,22 @@ def classify_scheduler_add_subtree(config: Any) -> dict[str, Any]:
         "expected_sequence_is_list": sequence_is_list,
         "scheduler_add_mapping_count": add_count,
         "scheduler_add_data_mapping_count": data_mapping_count,
-        "scheduler_add_data_entity_scalar_count": data_entity_scalar_count,
+        "scheduler_add_data_entity_reference_scalar_count": data_entity_reference_scalar_count,
         "scheduler_add_timeslots_key_count": timeslots_key_count,
         "scheduler_add_timeslots_list_count": timeslots_list_count,
         "scheduler_add_timeslots_string_count": timeslots_string_count,
-        "scheduler_add_timeslots_entity_scalar_count": timeslots_entity_scalar_count,
+        "scheduler_add_timeslots_entity_reference_scalar_count": (
+            timeslots_entity_reference_scalar_count
+        ),
         "scheduler_add_actions_key_count": actions_key_count,
         "scheduler_add_actions_list_count": actions_list_count,
         "scheduler_add_action_entry_mapping_count": action_entry_mapping_count,
-        "scheduler_add_actions_entity_scalar_count": actions_entity_scalar_count,
+        "scheduler_add_actions_entity_reference_scalar_count": (
+            actions_entity_reference_scalar_count
+        ),
         "scheduler_add_entity_id_key_count": entity_id_key_count,
         "scheduler_add_entity_id_scalar_count": entity_id_scalar_count,
-        "scheduler_add_entity_scalar_count": add_entity_scalar_count,
+        "scheduler_add_entity_reference_scalar_count": add_entity_reference_scalar_count,
         "shape_reason": reason,
     }
 
@@ -211,13 +223,17 @@ def entity_scalar(value):
     return isinstance(value, str) and ENTITY_ID.fullmatch(str(value)) is not None
 
 
-def count_entity_scalars(value):
+def count_entity_reference_scalars(value):
     if entity_scalar(value):
         return 1
     if isinstance(value, dict):
-        return sum(count_entity_scalars(item) for item in value.values())
+        return sum(
+            count_entity_reference_scalars(item)
+            for key, item in value.items()
+            if key not in {"service", "action"}
+        )
     if isinstance(value, list):
-        return sum(count_entity_scalars(item) for item in value)
+        return sum(count_entity_reference_scalars(item) for item in value)
     return 0
 
 
@@ -258,7 +274,7 @@ def action_container_counts(value):
     key_count = 0
     list_count = 0
     mapping_entry_count = 0
-    entity_scalar_count = 0
+    entity_reference_scalar_count = 0
     if isinstance(value, dict):
         for key, item in value.items():
             if key == "actions":
@@ -266,20 +282,20 @@ def action_container_counts(value):
                 if isinstance(item, list):
                     list_count += 1
                     mapping_entry_count += sum(isinstance(entry, dict) for entry in item)
-                    entity_scalar_count += count_entity_scalars(item)
+                    entity_reference_scalar_count += count_entity_reference_scalars(item)
             nested = action_container_counts(item)
             key_count += nested[0]
             list_count += nested[1]
             mapping_entry_count += nested[2]
-            entity_scalar_count += nested[3]
+            entity_reference_scalar_count += nested[3]
     elif isinstance(value, list):
         for item in value:
             nested = action_container_counts(item)
             key_count += nested[0]
             list_count += nested[1]
             mapping_entry_count += nested[2]
-            entity_scalar_count += nested[3]
-    return key_count, list_count, mapping_entry_count, entity_scalar_count
+            entity_reference_scalar_count += nested[3]
+    return key_count, list_count, mapping_entry_count, entity_reference_scalar_count
 
 
 def classify(config):
@@ -296,25 +312,25 @@ def classify(config):
     add_count = len(add_steps)
 
     data_mapping_count = 0
-    data_entity_scalar_count = 0
+    data_entity_reference_scalar_count = 0
     timeslots_key_count = 0
     timeslots_list_count = 0
     timeslots_string_count = 0
-    timeslots_entity_scalar_count = 0
+    timeslots_entity_reference_scalar_count = 0
     actions_key_count = 0
     actions_list_count = 0
     action_entry_mapping_count = 0
-    actions_entity_scalar_count = 0
+    actions_entity_reference_scalar_count = 0
     entity_id_key_count = 0
     entity_id_scalar_count = 0
-    add_entity_scalar_count = 0
+    add_entity_reference_scalar_count = 0
 
     for step in add_steps:
-        add_entity_scalar_count += count_entity_scalars(step)
+        add_entity_reference_scalar_count += count_entity_reference_scalars(step)
         data = step.get("data")
         if isinstance(data, dict):
             data_mapping_count += 1
-            data_entity_scalar_count += count_entity_scalars(data)
+            data_entity_reference_scalar_count += count_entity_reference_scalars(data)
             if "timeslots" in data:
                 timeslots_key_count += 1
                 timeslots = data.get("timeslots")
@@ -322,13 +338,15 @@ def classify(config):
                     timeslots_list_count += 1
                 if isinstance(timeslots, str):
                     timeslots_string_count += 1
-                timeslots_entity_scalar_count += count_entity_scalars(timeslots)
+                timeslots_entity_reference_scalar_count += count_entity_reference_scalars(
+                    timeslots
+                )
 
         action_counts = action_container_counts(step)
         actions_key_count += action_counts[0]
         actions_list_count += action_counts[1]
         action_entry_mapping_count += action_counts[2]
-        actions_entity_scalar_count += action_counts[3]
+        actions_entity_reference_scalar_count += action_counts[3]
 
         id_counts = entity_id_counts(step)
         entity_id_key_count += id_counts[0]
@@ -346,13 +364,15 @@ def classify(config):
         reason = "EXPECTED_SEQUENCE_NOT_LIST"
     elif add_count != 1:
         reason = "SCHEDULER_ADD_STEP_NOT_EXACT"
-    elif entity_id_scalar_count == 1:
+    elif entity_id_key_count == 1 and entity_id_scalar_count == 1:
         reason = "UNIQUE_ENTITY_ID_SCALAR_UNDER_SCHEDULER_ADD"
-    elif entity_id_key_count > 0 and entity_id_scalar_count == 0:
+    elif entity_id_key_count > 1:
+        reason = "ENTITY_ID_TARGET_STRUCTURALLY_AMBIGUOUS"
+    elif entity_id_key_count == 1 and entity_id_scalar_count == 0:
         reason = "ENTITY_ID_VALUE_SHAPE_INVALID"
-    elif add_entity_scalar_count == 1:
+    elif add_entity_reference_scalar_count == 1:
         reason = "UNIQUE_ENTITY_SCALAR_UNDER_SCHEDULER_ADD_NO_ENTITY_ID_KEY"
-    elif add_entity_scalar_count > 1:
+    elif add_entity_reference_scalar_count > 1:
         reason = "SCHEDULER_ADD_TARGET_STRUCTURALLY_AMBIGUOUS"
     else:
         reason = "SCHEDULER_ADD_TARGET_NOT_IDENTIFIED"
@@ -365,18 +385,22 @@ def classify(config):
         "expected_sequence_is_list": sequence_is_list,
         "scheduler_add_mapping_count": add_count,
         "scheduler_add_data_mapping_count": data_mapping_count,
-        "scheduler_add_data_entity_scalar_count": data_entity_scalar_count,
+        "scheduler_add_data_entity_reference_scalar_count": data_entity_reference_scalar_count,
         "scheduler_add_timeslots_key_count": timeslots_key_count,
         "scheduler_add_timeslots_list_count": timeslots_list_count,
         "scheduler_add_timeslots_string_count": timeslots_string_count,
-        "scheduler_add_timeslots_entity_scalar_count": timeslots_entity_scalar_count,
+        "scheduler_add_timeslots_entity_reference_scalar_count": (
+            timeslots_entity_reference_scalar_count
+        ),
         "scheduler_add_actions_key_count": actions_key_count,
         "scheduler_add_actions_list_count": actions_list_count,
         "scheduler_add_action_entry_mapping_count": action_entry_mapping_count,
-        "scheduler_add_actions_entity_scalar_count": actions_entity_scalar_count,
+        "scheduler_add_actions_entity_reference_scalar_count": (
+            actions_entity_reference_scalar_count
+        ),
         "scheduler_add_entity_id_key_count": entity_id_key_count,
         "scheduler_add_entity_id_scalar_count": entity_id_scalar_count,
-        "scheduler_add_entity_scalar_count": add_entity_scalar_count,
+        "scheduler_add_entity_reference_scalar_count": add_entity_reference_scalar_count,
         "shape_reason": reason,
     }
 
