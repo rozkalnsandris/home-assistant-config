@@ -43,6 +43,24 @@ A zero exit code requires `READY_FOR_PRIVATE_PRODUCTION_APPLY_PREPARATION`. The 
 
 `BLOCKED` is used for a version mismatch, an active legacy schedule helper, a legacy dashboard reference, or a failed privacy guard. Other incomplete evidence returns `NEEDS_REVIEW` rather than guessing.
 
+## Post-restart and rollback Scheduler invariant
+
+Production restart/rollback verification must distinguish bounded file integrity from Scheduler storage serialization.
+
+For the two bounded heater YAML files, exact byte classification and parent-directory fsync verification remain mandatory during apply and rollback.
+
+For Scheduler storage after a Home Assistant restart, raw `.storage` byte identity is evidence but is not the sole pass/fail invariant. Home Assistant storage can perform delayed or final writes around shutdown/startup, so equivalent recurring-schedule state may be reserialized without changing heater behavior.
+
+Use `tools/verify_scheduler_storage_semantics.py` against the retained prewrite Scheduler snapshot and the current Scheduler storage. The semantic gate fails closed unless both storage documents are valid and their parsed `data.schedules` lists are exactly equal. In particular:
+
+1. if the prewrite recurring schedule list is empty, the post-restart list must also be empty;
+2. if the prewrite list is nonempty, the post-restart parsed schedules must match exactly;
+3. any schedule addition, deletion, enabled-state change, target/action change, or other parsed schedule difference blocks the gate;
+4. raw byte equality and full parsed-JSON equality are reported as additional evidence but are not required when the recurring `data.schedules` semantics are preserved;
+5. malformed, missing, oversized, symlinked, or otherwise invalid storage fails closed.
+
+This semantic relaxation applies only across restart/rollback boundaries. The hardened dry-run still requires live Scheduler storage to remain byte-for-byte unchanged because the dry-run is not authorized to mutate it at all.
+
 ## Production gate
 
 Source consolidation and a successful read-only live preflight still do not authorize a production sync by themselves.
