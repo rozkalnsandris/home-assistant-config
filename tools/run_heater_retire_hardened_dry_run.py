@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 
 from tools import run_heater_retire_hardened_dry_run_impl as _impl
+
+ROOT = Path(__file__).resolve().parents[1]
+TOOLS_PACKAGE_MARKER = ROOT / "tools" / "__init__.py"
 
 
 def _running_version(docker: str, container: str) -> str:
@@ -21,7 +25,41 @@ def _running_version(docker: str, container: str) -> str:
     return value
 
 
+def _package_marker_destination(destination: str) -> str | None:
+    marker = "/repo/"
+    if marker not in destination:
+        return None
+    prefix, _remainder = destination.split(marker, 1)
+    return f"{prefix}/repo/tools/__init__.py"
+
+
+def _copy_into_container(
+    docker: str,
+    container: str,
+    source: Path,
+    destination: str,
+) -> None:
+    """Stage an explicit local tools package before each private worker file."""
+    marker_destination = _package_marker_destination(destination)
+    if marker_destination is not None:
+        _impl._private_stage_original_copy_into_container(
+            docker,
+            container,
+            TOOLS_PACKAGE_MARKER,
+            marker_destination,
+        )
+    _impl._private_stage_original_copy_into_container(
+        docker,
+        container,
+        source,
+        destination,
+    )
+
+
 _impl._running_version = _running_version
+if not hasattr(_impl, "_private_stage_original_copy_into_container"):
+    _impl._private_stage_original_copy_into_container = _impl._copy_into_container
+_impl._copy_into_container = _copy_into_container
 
 
 if __name__ == "__main__":
