@@ -115,11 +115,14 @@ Rollback must:
 1. restore every changed bounded target with the verified rollback primitive;
 2. require `equals_original` and parent-directory fsync;
 3. verify both bounded originals including content, mode, uid and gid;
-4. pass full live Home Assistant `check_config`;
-5. if a candidate restart was attempted, restart again after restoring the
-   originals — even when the original restart command itself failed or only
-   partially completed;
-6. verify the same empty-to-empty Scheduler semantic invariant after that
+4. if a candidate restart was attempted, immediately restart again after
+   restoring the originals — even when the candidate restart command itself
+   failed or only partially completed; this forced rollback restart must not be
+   blocked by a pre-restart `docker exec` dependency;
+5. re-run full live Home Assistant `check_config` after the forced rollback
+   restart when one was required, or directly after restoration when no restart
+   was attempted;
+6. verify the same empty-to-empty Scheduler semantic invariant after a rollback
    restart, or exact Scheduler byte identity when no restart was attempted;
 7. require the preserved timer helper state to match prewrite;
 8. require zero explicitly enabled legacy scheduling automations and the legacy
