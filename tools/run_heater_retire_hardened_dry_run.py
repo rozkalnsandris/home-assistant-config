@@ -6,9 +6,12 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from tools import run_heater_retire_hardened_dry_run_impl as _impl
 
-ROOT = Path(__file__).resolve().parents[1]
 TOOLS_PACKAGE_MARKER = ROOT / "tools" / "__init__.py"
 
 
