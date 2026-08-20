@@ -407,14 +407,24 @@ class HeaterRetireProductionGateTests(unittest.TestCase):
                 args,
             ) = _prepare_execute_fixture(tmp_path)
 
-            restart_sequence = [
-                common.GateError("HOME_ASSISTANT_RESTART_FAILED"),
-                {
+            restart_count = 0
+
+            def fake_restart(**_kwargs):
+                nonlocal restart_count
+                restart_count += 1
+                if restart_count == 1:
+                    raise common.GateError("HOME_ASSISTANT_RESTART_FAILED")
+                return {
                     "restart_boundary_changed": True,
                     "running_version_match": True,
                     "http_listener_ready": True,
-                },
-            ]
+                }
+
+            def fake_check(*_args):
+                # Simulate the failed/partial candidate restart leaving HA
+                # unavailable to docker exec until the rollback restart occurs.
+                return restart_count != 1
+
             with (
                 patch.object(common, "AUTH_MARKER_BASE", tmp_path / "auth"),
                 patch.object(common, "ROLLBACK_BASE", tmp_path / "rollback"),
@@ -447,12 +457,12 @@ class HeaterRetireProductionGateTests(unittest.TestCase):
                     "discover_config_root",
                     return_value=config_root,
                 ),
-                patch.object(common, "check_live_config", return_value=True),
+                patch.object(common, "check_live_config", side_effect=fake_check),
                 patch.object(common, "container_started_at", return_value="before"),
                 patch.object(
                     common,
                     "restart_and_wait",
-                    side_effect=restart_sequence,
+                    side_effect=fake_restart,
                 ) as restart,
                 patch.object(
                     preflight,
