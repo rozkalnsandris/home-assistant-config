@@ -43,6 +43,7 @@ class SchedulerStorageSemanticInvariantTests(unittest.TestCase):
         self.assertTrue(report["scheduler"]["schedules_equal"])
         self.assertTrue(report["scheduler"]["parsed_json_equal"])
         self.assertTrue(report["scheduler"]["bytes_equal"])
+        self.assertFalse(report["scheduler"]["nonempty_prewrite_supported"])
 
     def test_byte_drift_with_same_empty_schedules_passes(self) -> None:
         before = {
@@ -68,7 +69,7 @@ class SchedulerStorageSemanticInvariantTests(unittest.TestCase):
         self.assertFalse(report["scheduler"]["bytes_equal"])
         self.assertFalse(report["scheduler"]["raw_byte_identity_required_for_pass"])
 
-    def test_byte_drift_with_same_nonempty_schedules_passes(self) -> None:
+    def test_same_nonempty_schedules_block_as_restart_sensitive(self) -> None:
         schedules = [
             {
                 "schedule_id": "fixture",
@@ -93,9 +94,10 @@ class SchedulerStorageSemanticInvariantTests(unittest.TestCase):
 
         report = compare_scheduler_storage(self.before, self.current)
 
-        self.assertEqual(report["decision"], PASS)
+        self.assertEqual(report["decision"], BLOCKED)
         self.assertEqual(
-            report["reason"], "RECURRING_SCHEDULES_EXACTLY_PRESERVED"
+            report["reason"],
+            "NONEMPTY_PREWRITE_REQUIRES_RESTART_AWARE_VERIFICATION",
         )
         self.assertTrue(report["scheduler"]["schedules_equal"])
         self.assertFalse(report["scheduler"]["bytes_equal"])
@@ -113,7 +115,7 @@ class SchedulerStorageSemanticInvariantTests(unittest.TestCase):
         self.assertEqual(report["reason"], "SCHEDULER_SCHEDULES_CHANGED")
         self.assertFalse(report["scheduler"]["schedules_equal"])
 
-    def test_changed_nonempty_schedule_blocks(self) -> None:
+    def test_changed_nonempty_schedule_still_requires_restart_aware_verification(self) -> None:
         self.write(
             self.before,
             {"data": {"schedules": [{"schedule_id": "one", "enabled": True}]}},
@@ -126,7 +128,10 @@ class SchedulerStorageSemanticInvariantTests(unittest.TestCase):
         report = compare_scheduler_storage(self.before, self.current)
 
         self.assertEqual(report["decision"], BLOCKED)
-        self.assertEqual(report["reason"], "SCHEDULER_SCHEDULES_CHANGED")
+        self.assertEqual(
+            report["reason"],
+            "NONEMPTY_PREWRITE_REQUIRES_RESTART_AWARE_VERIFICATION",
+        )
 
     def test_invalid_current_storage_fails_closed(self) -> None:
         self.write(self.before, {"data": {"schedules": []}})
