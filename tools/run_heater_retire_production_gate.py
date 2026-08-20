@@ -124,11 +124,13 @@ def rollback_after_failure(
 
     if not all(_target_exact_original(state) for state in states):
         raise common.GateError("ROLLBACK_ORIGINALS_NOT_EXACT")
-    if not common.check_live_config(docker, container):
-        raise common.GateError("ROLLBACK_LIVE_CHECK_CONFIG_FAILED")
 
     restart_report: dict[str, bool] | None = None
     if restart_attempted:
+        # A failed or partial candidate restart may leave the container unable
+        # to service docker exec. Once exact originals are restored, force the
+        # rollback restart before any check_config probe that depends on the
+        # Home Assistant container being reachable.
         before = common.container_started_at(docker, container)
         restart_report = common.restart_and_wait(
             docker=docker,
@@ -136,6 +138,11 @@ def rollback_after_failure(
             expected_version=expected_version,
             before_started_at=before,
         )
+
+    if not common.check_live_config(docker, container):
+        raise common.GateError("ROLLBACK_LIVE_CHECK_CONFIG_FAILED")
+
+    if restart_attempted:
         scheduler_report = preflight.stable_scheduler_semantic_invariant(
             scheduler_before,
             scheduler_current,
