@@ -49,17 +49,20 @@ Production restart/rollback verification must distinguish bounded file integrity
 
 For the two bounded heater YAML files, exact byte classification and parent-directory fsync verification remain mandatory during apply and rollback.
 
-For Scheduler storage after a Home Assistant restart, raw `.storage` byte identity is evidence but is not the sole pass/fail invariant. Home Assistant storage can perform delayed or final writes around shutdown/startup, so equivalent recurring-schedule state may be reserialized without changing heater behavior.
+For Scheduler storage after a Home Assistant restart, raw `.storage` byte identity is evidence but is not the sole pass/fail invariant. Home Assistant storage can perform delayed or final writes around shutdown/startup, so an empty recurring-schedule state may be reserialized without creating recurring heater behavior.
 
-Use `tools/verify_scheduler_storage_semantics.py` against the retained prewrite Scheduler snapshot and the current Scheduler storage. The semantic gate fails closed unless both storage documents are valid and their parsed `data.schedules` lists are exactly equal. In particular:
+Use `tools/verify_scheduler_storage_semantics.py` against the retained prewrite Scheduler snapshot and the current Scheduler storage. This verifier is deliberately scoped to the RETIRE path whose proven prewrite recurring schedule list is empty. The gate behaves as follows:
 
-1. if the prewrite recurring schedule list is empty, the post-restart list must also be empty;
-2. if the prewrite list is nonempty, the post-restart parsed schedules must match exactly;
-3. any schedule addition, deletion, enabled-state change, target/action change, or other parsed schedule difference blocks the gate;
-4. raw byte equality and full parsed-JSON equality are reported as additional evidence but are not required when the recurring `data.schedules` semantics are preserved;
-5. malformed, missing, oversized, symlinked, or otherwise invalid storage fails closed.
+1. both storage documents must be valid and contain a list-valued `data.schedules` field;
+2. the retained prewrite recurring schedule list must be empty;
+3. the current post-restart recurring schedule list must also be empty;
+4. raw byte equality and full parsed-JSON equality are reported as additional evidence but are not required for the empty-to-empty PASS case;
+5. malformed, missing, oversized, symlinked, or otherwise invalid storage fails closed;
+6. any nonempty prewrite schedule list fails closed with `NONEMPTY_PREWRITE_REQUIRES_RESTART_AWARE_VERIFICATION` instead of claiming semantic equivalence from schedules alone.
 
-This semantic relaxation applies only across restart/rollback boundaries. The hardened dry-run still requires live Scheduler storage to remain byte-for-byte unchanged because the dry-run is not authorized to mutate it at all.
+The nonempty restriction matters because Scheduler persists a shutdown timestamp and uses it after restart when deciding whether an already-overlapping timeslot action should execute again or be skipped. A future verifier for nonempty Scheduler state must therefore include restart-aware execution semantics rather than only compare `data.schedules`.
+
+This semantic relaxation applies only across restart/rollback boundaries for the proven empty Scheduler baseline. The hardened dry-run still requires live Scheduler storage to remain byte-for-byte unchanged because the dry-run is not authorized to mutate it at all.
 
 ## Production gate
 
