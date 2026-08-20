@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify Scheduler storage semantics without exposing private schedule data."""
+"""Verify the empty Scheduler restart invariant without exposing private data."""
 
 from __future__ import annotations
 
@@ -99,7 +99,13 @@ def _load_storage(
 
 
 def compare_scheduler_storage(before: Path, current: Path) -> dict[str, Any]:
-    """Compare recurring Scheduler behavior while treating raw bytes as evidence only."""
+    """Verify the RETIRE path's empty recurring-schedule invariant.
+
+    Raw byte identity is evidence only across restart. A nonempty prewrite
+    Scheduler baseline is deliberately unsupported here because Scheduler's
+    persisted shutdown time influences post-restart initial action execution;
+    that case needs a restart-aware verifier rather than schedules-only equality.
+    """
     try:
         before_raw, before_payload, before_schedules = _load_storage(
             before, label="BEFORE"
@@ -117,15 +123,15 @@ def compare_scheduler_storage(before: Path, current: Path) -> dict[str, Any]:
     parsed_json_equal = before_payload == current_payload
     schedules_equal = before_schedules == current_schedules
 
-    if not schedules_equal:
+    if len(before_schedules) != 0:
+        decision = BLOCKED
+        reason = "NONEMPTY_PREWRITE_REQUIRES_RESTART_AWARE_VERIFICATION"
+    elif not schedules_equal:
         decision = BLOCKED
         reason = "SCHEDULER_SCHEDULES_CHANGED"
-    elif len(before_schedules) == 0:
-        decision = PASS
-        reason = "EMPTY_RECURRING_SCHEDULES_PRESERVED"
     else:
         decision = PASS
-        reason = "RECURRING_SCHEDULES_EXACTLY_PRESERVED"
+        reason = "EMPTY_RECURRING_SCHEDULES_PRESERVED"
 
     return {
         "schema": 1,
@@ -140,6 +146,7 @@ def compare_scheduler_storage(before: Path, current: Path) -> dict[str, Any]:
             "parsed_json_equal": parsed_json_equal,
             "bytes_equal": bytes_equal,
             "raw_byte_identity_required_for_pass": False,
+            "nonempty_prewrite_supported": False,
         },
         "privacy": privacy_report(),
         "production_mutation": production_mutation_report(),
