@@ -43,6 +43,27 @@ A zero exit code requires `READY_FOR_PRIVATE_PRODUCTION_APPLY_PREPARATION`. The 
 
 `BLOCKED` is used for a version mismatch, an active legacy schedule helper, a legacy dashboard reference, or a failed privacy guard. Other incomplete evidence returns `NEEDS_REVIEW` rather than guessing.
 
+## Post-restart and rollback Scheduler invariant
+
+Production restart/rollback verification must distinguish bounded file integrity from Scheduler storage serialization.
+
+For the two bounded heater YAML files, exact byte classification and parent-directory fsync verification remain mandatory during apply and rollback.
+
+For Scheduler storage after a Home Assistant restart, raw `.storage` byte identity is evidence but is not the sole pass/fail invariant. Home Assistant storage can perform delayed or final writes around shutdown/startup, so an empty recurring-schedule state may be reserialized without creating recurring heater behavior.
+
+Use `tools/verify_scheduler_storage_semantics.py` against the retained prewrite Scheduler snapshot and the current Scheduler storage. This verifier is deliberately scoped to the RETIRE path whose proven prewrite recurring schedule list is empty. The gate behaves as follows:
+
+1. both storage documents must be valid and contain a list-valued `data.schedules` field;
+2. the retained prewrite recurring schedule list must be empty;
+3. the current post-restart recurring schedule list must also be empty;
+4. raw byte equality and full parsed-JSON equality are reported as additional evidence but are not required for the empty-to-empty PASS case;
+5. malformed, missing, oversized, symlinked, or otherwise invalid storage fails closed;
+6. any nonempty prewrite schedule list fails closed with `NONEMPTY_PREWRITE_REQUIRES_RESTART_AWARE_VERIFICATION` instead of claiming semantic equivalence from schedules alone.
+
+The nonempty restriction matters because Scheduler persists a shutdown timestamp and uses it after restart when deciding whether an already-overlapping timeslot action should execute again or be skipped. A future verifier for nonempty Scheduler state must therefore include restart-aware execution semantics rather than only compare `data.schedules`.
+
+This semantic relaxation applies only across restart/rollback boundaries for the proven empty Scheduler baseline. The hardened dry-run still requires live Scheduler storage to remain byte-for-byte unchanged because the dry-run is not authorized to mutate it at all.
+
 ## Production gate
 
 Source consolidation and a successful read-only live preflight still do not authorize a production sync by themselves.
