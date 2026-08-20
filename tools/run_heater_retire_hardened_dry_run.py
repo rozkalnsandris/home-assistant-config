@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools import reconcile_heater_retire_postincident as _postincident
 from tools import run_heater_retire_hardened_dry_run_impl as _impl
 
 TOOLS_PACKAGE_MARKER = ROOT / "tools" / "__init__.py"
@@ -60,6 +61,8 @@ def _copy_into_container(
 
 
 _impl._running_version = _running_version
+_impl.collect_reconciliation = _postincident.collect_reconciliation
+_impl.validate_reconciliation_report = _postincident.validate_reconciliation_report
 if not hasattr(_impl, "_private_stage_original_copy_into_container"):
     _impl._private_stage_original_copy_into_container = _impl._copy_into_container
 _impl._copy_into_container = _copy_into_container
