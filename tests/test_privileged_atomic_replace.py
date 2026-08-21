@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from tools import privileged_atomic_replace as p
+import tools.run_heater_retire_production_gate as gate
 from tools.verify_bounded_private_file_replace import (
     APPLY,
     EQUALS_CANDIDATE,
@@ -47,25 +48,29 @@ class PrivilegedAtomicReplaceTests(unittest.TestCase):
             state = state_for(Path(d))
             request = p._request(state, action="preflight", phase=APPLY, ordinal=1)
             captured = {}
+
             def fake_run(command, **kwargs):
                 captured["command"] = command
                 captured["input"] = kwargs["input"]
                 return subprocess.CompletedProcess(
                     command,
                     0,
-                    stdout=json.dumps({
-                        "schema": 1,
-                        "decision": "PASS",
-                        "reason": None,
-                        "ordinal": 1,
-                        "phase": "apply",
-                        "classification": "equals_original",
-                        "target_may_have_changed": False,
-                        "parent_fsync_performed": False,
-                        "privacy": p.privacy_report(),
-                    }),
+                    stdout=json.dumps(
+                        {
+                            "schema": 1,
+                            "decision": "PASS",
+                            "reason": None,
+                            "ordinal": 1,
+                            "phase": "apply",
+                            "classification": "equals_original",
+                            "target_may_have_changed": False,
+                            "parent_fsync_performed": False,
+                            "privacy": p.privacy_report(),
+                        }
+                    ),
                     stderr="",
                 )
+
             with (
                 patch.object(p, "_worktree_clean", return_value=True),
                 patch.object(p.subprocess, "run", side_effect=fake_run),
@@ -188,6 +193,54 @@ class PrivilegedAtomicReplaceTests(unittest.TestCase):
             report["reason"], "PRIVILEGED_SOURCE_WORKTREE_NOT_CLEAN"
         )
         self.assertTrue(all(v is False for v in report["privacy"].values()))
+
+    def test_canonical_gate_installs_privileged_apply_and_rollback(self):
+        self.assertIs(
+            gate.apply_verified_replace,
+            p.apply_verified_replace_with_privilege,
+        )
+        self.assertIs(
+            gate.rollback_verified_replace,
+            p.rollback_verified_replace_with_privilege,
+        )
+
+    def test_privilege_preflight_runs_before_rollback_bundle(self):
+        wrapper = gate.preflight.create_rollback_bundle
+        events = []
+
+        def fake_preflight(_states):
+            events.append("preflight")
+
+        def fake_bundle(*_args, **_kwargs):
+            events.append("bundle")
+            return ("rollback", "scheduler")
+
+        with (
+            patch.object(
+                p,
+                "preflight_privileged_replacements",
+                side_effect=fake_preflight,
+            ),
+            patch.dict(
+                wrapper.__globals__,
+                {"_original_create_rollback_bundle": fake_bundle},
+            ),
+        ):
+            result = wrapper(states=[])
+
+        self.assertEqual(events, ["preflight", "bundle"])
+        self.assertEqual(result, ("rollback", "scheduler"))
+
+    def test_preserved_impl_consumes_authorization_after_bundle_boundary(self):
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "tools"
+            / "run_heater_retire_production_gate_impl.py"
+        ).read_text(encoding="utf-8")
+        self.assertLess(
+            source.index("preflight.create_rollback_bundle("),
+            source.index("common.consume_authorization("),
+        )
 
 
 if __name__ == "__main__":
