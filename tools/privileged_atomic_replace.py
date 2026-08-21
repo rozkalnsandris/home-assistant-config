@@ -29,6 +29,7 @@ EQUALS_CANDIDATE = "equals_candidate"
 EQUALS_ORIGINAL = "equals_original"
 OTHER = "other"
 MAX_REQUEST_BYTES = 4 * 1024 * 1024
+PRIVILEGED_SUDO = "/usr/bin/sudo"
 PRIVILEGED_PYTHON = "/usr/bin/python3"
 ALLOWED_TARGET_NAMES = {1: "silditajs.yaml", 2: "heater_scheduler.yaml"}
 
@@ -125,7 +126,7 @@ def invoke_privileged_worker(request: dict[str, Any]) -> dict[str, Any]:
             phase=request.get("phase"),
         )
     command = [
-        "sudo",
+        PRIVILEGED_SUDO,
         "-n",
         "--",
         PRIVILEGED_PYTHON,

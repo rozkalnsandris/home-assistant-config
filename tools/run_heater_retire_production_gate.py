@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 
@@ -14,6 +15,7 @@ from tools import privileged_atomic_replace as _privileged
 from tools import run_heater_retire_production_gate_impl as _impl
 
 _original_create_rollback_bundle = _impl.preflight.create_rollback_bundle
+_original_main = _impl.main
 
 
 def _create_rollback_bundle_with_privileged_preflight(*args, **kwargs):
@@ -27,6 +29,16 @@ def _create_rollback_bundle_with_privileged_preflight(*args, **kwargs):
     return _original_create_rollback_bundle(*args, **kwargs)
 
 
+def _main_with_unprivileged_operator(argv=None):
+    if os.geteuid() == 0:
+        report = _impl.blocked_report("PRODUCTION_GATE_MUST_NOT_RUN_AS_ROOT")
+        _impl.sys.stdout.write(
+            _impl.json.dumps(report, indent=2, sort_keys=True) + "\n"
+        )
+        return 20
+    return _original_main(argv)
+
+
 _impl.apply_verified_replace = _privileged.apply_verified_replace_with_privilege
 _impl.rollback_verified_replace = (
     _privileged.rollback_verified_replace_with_privilege
@@ -34,6 +46,7 @@ _impl.rollback_verified_replace = (
 _impl.preflight.create_rollback_bundle = (
     _create_rollback_bundle_with_privileged_preflight
 )
+_impl.main = _main_with_unprivileged_operator
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
+import io
 import json
 import os
+from contextlib import redirect_stdout
 from pathlib import Path
 import stat
 import subprocess
@@ -77,6 +79,8 @@ class PrivilegedAtomicReplaceTests(unittest.TestCase):
             ):
                 report = p.invoke_privileged_worker(request)
             self.assertEqual(report["decision"], "PASS")
+            self.assertEqual(p.PRIVILEGED_SUDO, "/usr/bin/sudo")
+            self.assertEqual(captured["command"][:3], ["/usr/bin/sudo", "-n", "--"])
             argv = "\0".join(captured["command"])
             self.assertNotIn(str(state.target_path), argv)
             self.assertNotIn("candidate", argv)
@@ -203,6 +207,20 @@ class PrivilegedAtomicReplaceTests(unittest.TestCase):
             gate.rollback_verified_replace,
             p.rollback_verified_replace_with_privilege,
         )
+
+    def test_canonical_gate_rejects_root_operator(self):
+        stdout = io.StringIO()
+        with (
+            patch.object(gate.main.__globals__["os"], "geteuid", return_value=0),
+            redirect_stdout(stdout),
+        ):
+            rc = gate.main([])
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(rc, 20)
+        self.assertEqual(report["decision"], gate.BLOCKED)
+        self.assertEqual(report["reason"], "PRODUCTION_GATE_MUST_NOT_RUN_AS_ROOT")
+        self.assertFalse(report["authorization_consumed"])
+        self.assertFalse(report["production_change"])
 
     def test_privilege_preflight_runs_before_rollback_bundle(self):
         wrapper = gate.preflight.create_rollback_bundle
