@@ -56,3 +56,18 @@ Before any production apply:
 6. diff is reviewed for secrets/private-runtime leakage and public metadata exposure;
 7. rollback revision and Home Assistant backup path are established;
 8. production apply is separately authorized.
+
+<!-- BEGIN FAST-LANE-V2.1-MANAGED -->
+## FAST-LANE v2.1 Hybrid
+
+This repository adopts `docs/FAST_LANE_V2_1.md`.
+
+- **FAST** covers Git-only documentation/configuration/test changes through Ready when no live Home Assistant state is changed. FAST does not reduce the public-information/secret review requirement.
+- A FAST PR may batch **2-5 closely related same-risk work items** when they form one coherent configuration acceptance story.
+- At most **two scope-preserving corrective commits** may address CI/review findings after initial publication; a third correction or material scope/risk expansion requires STOP.
+- Use one Ready receipt and refresh mutable merge evidence immediately before merge.
+- **STRICT** includes writing live `/config`, reload/restart/recreate, Home Assistant service calls that mutate runtime/devices, `.storage`, backups, Cloudflare/ingress, Docker/systemd/host mutation, secrets and equivalent live authority.
+- Merge remains explicit owner authority and never authorizes production application.
+
+Existing public-information and production-safety rules remain stricter where applicable.
+<!-- END FAST-LANE-V2.1-MANAGED -->
