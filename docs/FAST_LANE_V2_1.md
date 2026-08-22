@@ -1,17 +1,29 @@
-# FAST-LANE v2.1 Hybrid — Home Assistant config
+# FAST-LANE v2.2 Composite — Home Assistant config
 
-This public repository adopts the shared FAST/STRICT workflow without weakening public-information or live Home Assistant safety.
+> Compatibility path: `AGENTS.md` already points to this v2.1 filename; these are the authoritative v2.2 rules.
+
+## Core rule
+
+**The human approves the RISK / DECISION. Automation executes the TECHNICAL STEPS.** Read-only checks never create owner gates. STRICT classifies live mutation risk; it does not require approval for each technical checkpoint.
 
 ## FAST
 
-FAST includes Git-only documentation, reviewed YAML/config source and tests when no live `/config`, device, helper, automation or container state is changed. A FAST batch may cover 2-5 closely related same-risk configuration items and may proceed through Ready with up to two scope-preserving corrective commits.
+Git-only documentation, reviewed YAML/config source and tests may proceed from fresh GitHub state through Ready in one coherent batch, including branch, PR, validation/review and up to two scope-preserving corrections. Batch 2-5 closely related same-risk items when coherent. Merge remains explicit.
 
-## STRICT
+## Human gate budget and Composite STRICT
 
-Separate explicit owner authorization is required for live `/config` writes, reload/restart/recreate, Home Assistant service calls that mutate state/devices, `.storage`, backup operations, Cloudflare/ingress, Docker/systemd/host changes, secrets or other live mutation.
+Normal delivery has at most two owner gates: **MERGE**, then **COMPOSITE LIVE** only if live Home Assistant/host mutation is required. Before requesting live authority, gather all obtainable read-only evidence. One bounded authorization binds exact source SHA/config target, allowed mutation categories, limits, explicit exclusions and expected baseline. Preflight/revalidation is part of the same one-shot.
 
-## CI and evidence
+## Local STRICT boundaries
 
-The existing validation workflow remains intact in Phase 1 because every public config change still needs secret/public-metadata and Home Assistant validation. Speed comes from batching and reduced authorization/evidence ceremony rather than skipping protective validation.
+Live `/config` writes, reload/restart/recreate, state/device-mutating service calls, `.storage`, backup operations, Cloudflare/ingress, Docker/systemd/host changes, secrets or another live mutation require Composite Live authorization.
 
-Produce one complete Ready receipt; immediately before merge refresh only mutable merge evidence. Merge remains explicit and never authorizes production application.
+If live apply tooling produces a candidate/config artifact, use pinned tooling, verify the exact candidate and re-check runtime baseline/drift before applying it.
+
+## Failure and evidence
+
+Authorization is consumed at the first authorized mutation. Any later error/ambiguity requires evidence preservation and STOP; no automatic retry, rollback, cleanup or alternate mutation path unless explicitly pre-authorized.
+
+Use one Ready receipt and one final live receipt. Put any remaining owner decision at the **end** under `ACTION REQUIRED`; when the owner must enter/run something, provide the exact copyable instruction in a fenced `bash` block.
+
+Merge never authorizes production application or device/host mutation.
