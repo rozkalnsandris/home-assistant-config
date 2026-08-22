@@ -57,17 +57,22 @@ Before any production apply:
 7. rollback revision and Home Assistant backup path are established;
 8. production apply is separately authorized.
 
-<!-- BEGIN FAST-LANE-V2.1-MANAGED -->
-## FAST-LANE v2.1 Hybrid
+<!-- BEGIN FAST-LANE-V2.2-MANAGED -->
+## FAST-LANE v2.2 Composite
 
-This repository adopts `docs/FAST_LANE_V2_1.md`.
+Read `docs/FAST_LANE_V2_2.md` as the active local startup contract.
 
-- **FAST** covers Git-only documentation/configuration/test changes through Ready when no live Home Assistant state is changed. FAST does not reduce the public-information/secret review requirement.
-- A FAST PR may batch **2-5 closely related same-risk work items** when they form one coherent configuration acceptance story.
-- At most **two scope-preserving corrective commits** may address CI/review findings after initial publication; a third correction or material scope/risk expansion requires STOP.
-- Use one Ready receipt and refresh mutable merge evidence immediately before merge.
+**Primary rule:** the human approves the **RISK / DECISION**; automation executes the **TECHNICAL STEPS**.
+
+- `START`, `turpini`, or equivalent continuation may carry Git-only documentation/configuration/test work through Ready when no live Home Assistant state is changed. FAST does not reduce the public-information/secret review requirement.
+- FAST may batch **2-5 closely related same-risk work items** and use up to **two scope-preserving corrective commits** for CI/review findings.
+- Normal delivery has at most two owner gates: explicit **MERGE**, then one bounded **COMPOSITE LIVE** only when live Home Assistant/host mutation is required.
+- Read-only inventory, validation, evidence refresh, CI/review inspection, candidate checks and reconciliation are technical steps, not owner gates.
+- Composite Live must bind exact source SHA/config target, allowed mutation categories, practical limits, explicit exclusions and expected baseline. Preflight/revalidation belongs inside the same fail-closed one-shot.
+- Authorization is consumed at the first authorized mutation. Any later error, ambiguity or drift requires evidence preservation and STOP; no automatic retry, rollback, cleanup or alternate mutation path unless explicitly pre-authorized.
 - **STRICT** includes writing live `/config`, reload/restart/recreate, Home Assistant service calls that mutate runtime/devices, `.storage`, backups, Cloudflare/ingress, Docker/systemd/host mutation, secrets and equivalent live authority.
+- Put any remaining owner decision visibly at the end under `ACTION REQUIRED` and provide exact copyable input when needed.
 - Merge remains explicit owner authority and never authorizes production application.
 
 Existing public-information and production-safety rules remain stricter where applicable.
-<!-- END FAST-LANE-V2.1-MANAGED -->
+<!-- END FAST-LANE-V2.2-MANAGED -->
