@@ -76,3 +76,20 @@ Read `docs/FAST_LANE_V2_2.md` as the active local startup contract.
 
 Existing public-information and production-safety rules remain stricter where applicable.
 <!-- END FAST-LANE-V2.2-MANAGED -->
+
+<!-- BEGIN GITHUB-ONLY-LIVE-ALL-V1-MANAGED -->
+## GITHUB-ONLY / LIVE-ALL v1
+
+Canonical shared contract: `rozkalnsandris/ops-workflows/docs/GITHUB_ONLY_LIVE_ALL.md` with machine invariants in `policy/github-only-live-all-v1.json`.
+
+- `GITHUB-ONLY` (including `git hub only`) means fresh GitHub state, Git-only documentation/configuration/test work, and production-apply preparation up to but not including the first live Home Assistant/host mutation.
+- Persist deferred rollout state as public-safe `[DEPLOY-QUEUE]` issues in `rozkalnsandris/ops-workflows`; chat or memory is never the queue.
+- Because both repositories are public, queue metadata must not expose household/device identifiers, private runtime coordinates/topology, secrets, protected configuration, authenticated storage or sensitive logs.
+- Merge remains separately explicit. Neither `GITHUB-ONLY` nor `LIVE-ALL` authorizes merge.
+- A GitHub write whose deterministic side effect changes live Home Assistant/host state counts as live work and must not run under `GITHUB-ONLY`.
+- Queue `READY` requires the final exact deployable SHA/config target, exact reviewed entrypoint, preflight, verification, allowed mutations/limits and no outstanding separate prerequisite owner gate.
+- `LIVE-ALL` snapshots only open `READY` items present at command start, freshly revalidates exact source/target/baseline and may execute only ordinary predeclared production-apply mutations that this repository already permits inside that exact authorization envelope.
+- Live `/config` writes, reload/restart/recreate, state-changing Home Assistant services, `.storage`, backups, Cloudflare/ingress, Docker/systemd/host mutation and secrets remain separately gated where the repository-local contract requires it.
+- After any selected live mutation starts, error/ambiguity requires public-safe evidence preservation and STOP of the remaining batch; no automatic retry/rollback/cleanup/alternate mutation path unless explicitly pre-authorized.
+- Existing public-information and production-safety rules remain authoritative and stricter where applicable.
+<!-- END GITHUB-ONLY-LIVE-ALL-V1-MANAGED -->
