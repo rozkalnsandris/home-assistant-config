@@ -90,6 +90,18 @@ class DashboardQualityAuditTests(unittest.TestCase):
         ):
             analyze_dashboard_quality(payload)
 
+    def test_invalid_grid_options_fails_closed(self):
+        payload = accepted_payload()
+        payload["views"][0]["sections"][0]["cards"][0]["grid_options"] = {
+            "columns": 13
+        }
+
+        with self.assertRaisesRegex(
+            DashboardQualityAuditError,
+            "LAYOUT_DECLARATION_INVALID",
+        ):
+            analyze_dashboard_quality(payload)
+
     def test_grid_options_classifies_explicit_and_default(self):
         payload = accepted_payload()
         payload["views"][0]["sections"][0]["cards"][0]["grid_options"] = {
