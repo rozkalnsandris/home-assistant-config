@@ -367,6 +367,13 @@ def _classify_action(action: Any) -> tuple[str, str]:
     return "unknown", "unknown"
 
 
+def _confirmation_enabled(action: Any) -> bool:
+    if not isinstance(action, dict):
+        return False
+    confirmation = action.get("confirmation")
+    return confirmation is True or isinstance(confirmation, dict)
+
+
 def _action_metrics(cards: list[dict[str, Any]]) -> dict[str, Any]:
     surfaces = {
         "informational": 0,
@@ -404,12 +411,7 @@ def _action_metrics(cards: list[dict[str, Any]]) -> dict[str, Any]:
                 else:
                     state_change_impact_unknown += 1
 
-                confirmation = (
-                    action.get("confirmation")
-                    if isinstance(action, dict)
-                    else None
-                )
-                if isinstance(confirmation, dict):
+                if _confirmation_enabled(action):
                     state_changing_with_confirmation += 1
                     if impact == "higher_impact":
                         higher_impact_with_confirmation += 1
