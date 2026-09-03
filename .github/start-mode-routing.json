@@ -1,0 +1,55 @@
+{
+  "schema_version": 3,
+  "repository": "rozkalnsandris/home-assistant-config",
+  "default_continuation_mode": "FAST-LANE v2.2",
+  "lane_roles": {
+    "FAST-LANE v2.2": "SAFE_DISCOVERY_AUDIT_AND_NON_FULL_CONTINUATION",
+    "AUTO-RUN-FULL": "NORMAL_ISSUE_SCOPED_IMPLEMENTATION"
+  },
+  "explicit_modes": {
+    "GITHUB-ONLY": {
+      "requires_explicit_current_command_token": true,
+      "accepted_tokens": ["GITHUB-ONLY", "git hub only"],
+      "may_be_inferred_from_context": false
+    },
+    "LIVE-ALL": {
+      "requires_explicit_current_command_token": true,
+      "accepted_tokens": ["LIVE-ALL"],
+      "may_be_inferred_from_context": false
+    },
+    "AUTO-RUN-FULL": {
+      "canonical_prefix": "AUTO-RUN FULL",
+      "requires_explicit_current_command_token": true,
+      "accepted_tokens": ["AUTO-RUN FULL"],
+      "requires_repository_argument": "home-assistant-config",
+      "requires_issue_argument": true,
+      "issue_argument_pattern": "^#[1-9][0-9]*$",
+      "policy": ".github/auto-run-full-v2.json",
+      "controller_issue": 140,
+      "preferred_resume": "GITHUB_EVENT_TRIGGERED_WORK",
+      "fallback_resume": "HOURLY_SCHEDULED_WATCHDOG_WHEN_CONFIGURED",
+      "preferred_merge": "SQUASH_AFTER_FINAL_EXACT_HEAD_READINESS",
+      "may_be_inferred_from_context": false
+    }
+  },
+  "bare_continuation_commands": ["START", "START home-assistant-config", "turpini"],
+  "bare_continuation_result": "FAST-LANE v2.2",
+  "forbidden_mode_inference_sources": [
+    ".github/start-github-only.json existence",
+    "deploy-queue state",
+    "handoff or issue continuity",
+    "executor availability or unavailability",
+    "historical chat mode",
+    "prior authorization receipt",
+    "AUTO-RUN controller state without a fresh explicit activation command",
+    "prior AUTO-RUN authorization receipt"
+  ],
+  "examples": {
+    "START home-assistant-config": "FAST-LANE v2.2",
+    "turpini": "FAST-LANE v2.2",
+    "START home-assistant-config GITHUB-ONLY": "GITHUB-ONLY",
+    "GITHUB-ONLY": "GITHUB-ONLY",
+    "LIVE-ALL": "LIVE-ALL",
+    "AUTO-RUN FULL home-assistant-config #141": "AUTO-RUN-FULL"
+  }
+}
