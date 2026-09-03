@@ -126,10 +126,27 @@ def _grid_options_class(card: dict[str, Any]) -> tuple[str, str]:
     if not isinstance(options, dict):
         return "invalid", "invalid"
 
+    rows = options.get("rows")
+    rows_valid = (
+        rows is None
+        or rows == "auto"
+        or (
+            isinstance(rows, int)
+            and not isinstance(rows, bool)
+            and rows > 0
+        )
+    )
+    if not rows_valid:
+        return "invalid", "invalid"
+
     columns = options.get("columns")
     if columns == "full":
         return "explicit", "full"
-    if isinstance(columns, int) and not isinstance(columns, bool) and columns > 0:
+    if (
+        isinstance(columns, int)
+        and not isinstance(columns, bool)
+        and 1 <= columns <= 12
+    ):
         return "explicit", "bounded"
     if columns is None:
         return "explicit", "unspecified"
@@ -387,7 +404,12 @@ def _action_metrics(cards: list[dict[str, Any]]) -> dict[str, Any]:
                 else:
                     state_change_impact_unknown += 1
 
-                if isinstance(action, dict) and "confirmation" in action:
+                confirmation = (
+                    action.get("confirmation")
+                    if isinstance(action, dict)
+                    else None
+                )
+                if isinstance(confirmation, dict):
                     state_changing_with_confirmation += 1
                     if impact == "higher_impact":
                         higher_impact_with_confirmation += 1
