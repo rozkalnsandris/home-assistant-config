@@ -155,6 +155,40 @@ class DashboardQualityAuditTests(unittest.TestCase):
         self.assertNotIn("https://synthetic.invalid/path", rendered)
         self.assertNotIn("lock.lock", rendered)
 
+    def test_boolean_confirmation_true_counts_as_protection(self):
+        payload = accepted_payload()
+        payload["views"][0]["sections"][0]["cards"][0]["tap_action"] = {
+            "action": "perform-action",
+            "perform_action": "lock.lock",
+            "target": {"entity_id": "lock.synthetic"},
+            "confirmation": True,
+        }
+
+        report = analyze_dashboard_quality(payload)
+
+        self.assertEqual(
+            report["decision"], "DASHBOARD_CURRENTLY_OPTIMAL_NO_CHANGE"
+        )
+        self.assertEqual(report["actions"]["confirmation_coverage_count"], 1)
+        self.assertEqual(report["actions"]["unguarded_higher_impact_count"], 0)
+
+    def test_boolean_confirmation_false_remains_unprotected(self):
+        payload = accepted_payload()
+        payload["views"][0]["sections"][0]["cards"][0]["tap_action"] = {
+            "action": "perform-action",
+            "perform_action": "lock.lock",
+            "target": {"entity_id": "lock.synthetic"},
+            "confirmation": False,
+        }
+
+        report = analyze_dashboard_quality(payload)
+
+        self.assertEqual(
+            report["decision"], "READY_FOR_BOUNDED_DASHBOARD_QUALITY_PASS"
+        )
+        self.assertEqual(report["actions"]["confirmation_coverage_count"], 0)
+        self.assertEqual(report["actions"]["unguarded_higher_impact_count"], 1)
+
     def test_unguarded_higher_impact_action_is_bounded_candidate(self):
         payload = accepted_payload()
         payload["views"][0]["sections"][0]["cards"][0]["tap_action"] = {
