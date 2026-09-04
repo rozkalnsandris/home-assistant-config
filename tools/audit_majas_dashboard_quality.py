@@ -18,7 +18,7 @@ from tools.plan_majas_dashboard_activation import (
     resolve_binding_owner,
 )
 
-EXPECTED_HA_VERSION = "2026.8.2"
+EXPECTED_HA_VERSION = "2026.8.3"
 DEFAULT_CONFIG_ROOT = Path("/config")
 DEFAULT_DASHBOARD_TITLE = "Mājas YAML"
 

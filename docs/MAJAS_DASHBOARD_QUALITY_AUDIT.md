@@ -22,7 +22,7 @@ tools/audit_majas_dashboard_quality.py
 The audit is deliberately fail-closed around the final accepted sanitized
 shape recorded by the completed dashboard roadmap:
 
-- Home Assistant `2026.8.2`;
+- Home Assistant `2026.8.3`;
 - one view;
 - three sections;
 - 11 recursive cards;
@@ -32,6 +32,12 @@ shape recorded by the completed dashboard roadmap:
 - zero grouping wrappers;
 - the exact five-file / three-directory modular tree;
 - native Sections for every view.
+
+The Home Assistant version baseline follows the repository pin in
+`home-assistant-version.txt`. Under #143 the pin moved from `2026.8.2` to
+`2026.8.3` only after a sanitized read-only production probe proved exact
+source/runtime version drift. The patch-level alignment does not itself imply a
+dashboard redesign or any production mutation.
 
 Changing this baseline requires a normal reviewed source change. Runtime drift
 must not be made to pass by weakening the historical or current constants.
