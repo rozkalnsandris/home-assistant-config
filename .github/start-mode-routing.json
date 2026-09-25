@@ -2,6 +2,7 @@
   "schema_version": 3,
   "repository": "rozkalnsandris/home-assistant-config",
   "default_continuation_mode": "FAST-LANE v2.2",
+  "github_api_access_contract": ".github/github-api-access-v1.json",
   "lane_roles": {
     "FAST-LANE v2.2": "SAFE_DISCOVERY_AUDIT_AND_NON_FULL_CONTINUATION",
     "AUTO-RUN-FULL": "NORMAL_ISSUE_SCOPED_IMPLEMENTATION"
