@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "repository": "rozkalnsandris/home-assistant-config",
+  "shared_contract": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "revision": "3bb0740b5f0a8ce631d2ff79f1acc4999ff6ed2c"
+  },
+  "read_policy": {
+    "authenticated_preferred": true,
+    "serial_requests": true,
+    "minimum_sufficient_reads": true,
+    "changed_files_on_demand": true,
+    "tight_polling_forbidden": true,
+    "conditional_requests_when_supported": true,
+    "poll_interval_headers_honored_when_available": true
+  },
+  "read_dispositions": [
+    "PRIMARY_RATE_LIMIT_EXHAUSTED",
+    "SECONDARY_RATE_LIMIT_SUSPECTED",
+    "RETRY_AFTER_REQUIRED",
+    "RESET_WAIT_REQUIRED",
+    "READ_BACKOFF_REQUIRED",
+    "TRANSPORT_RATE_LIMIT_METADATA_UNAVAILABLE"
+  ],
+  "mutation_policy": {
+    "serial_writes": true,
+    "duplicate_mutation_after_ambiguous_outcome_forbidden": true,
+    "reconcile_read_only_after_ambiguous_outcome": true,
+    "stop_after_ambiguous_mutation_outcome": true
+  },
+  "mutation_dispositions": [
+    "MUTATION_CONFIRMED_SUCCESS",
+    "MUTATION_CONFIRMED_REJECTED_BEFORE_APPLY",
+    "MUTATION_OUTCOME_UNKNOWN_RATE_LIMIT",
+    "MUTATION_OUTCOME_UNKNOWN_TIMEOUT",
+    "MUTATION_OUTCOME_UNKNOWN_TRANSPORT",
+    "POST_MUTATION_RECONCILIATION_REQUIRED"
+  ],
+  "authority": {
+    "merge_authority_unchanged": true,
+    "production_authority_unchanged": true,
+    "home_assistant_live_authority_not_granted": true,
+    "secrets_permissions_repository_settings_authority_not_granted": true
+  }
+}
