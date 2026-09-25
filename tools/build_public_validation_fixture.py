@@ -30,7 +30,18 @@ sensor.ci_placeholder:
 """,
     "private/http.yaml": "{}\n",
     "private/lovelace.yaml": """\
-mode: storage
+dashboards:
+  ci-yaml:
+    mode: yaml
+    title: CI YAML
+    show_in_sidebar: false
+    filename: dashboards/ci.yaml
+""",
+    "dashboards/ci.yaml": """\
+title: CI YAML
+views:
+  - title: CI
+    cards: []
 """,
     "private/utility_meter.yaml": """\
 ci_energy_daily:
