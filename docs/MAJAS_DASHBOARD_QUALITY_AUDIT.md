@@ -1,6 +1,6 @@
 # Mājas dashboard post-roadmap quality audit
 
-Tracking issue: `#143`.
+Tracking issues: `#143` (historical baseline), `#148` (Home Assistant 2026.9 alignment).
 
 This document defines the current-state, privacy-safe audit contract for the
 accepted modular `Mājas YAML` dashboard after the completed split and Sections
@@ -22,7 +22,7 @@ tools/audit_majas_dashboard_quality.py
 The audit is deliberately fail-closed around the final accepted sanitized
 shape recorded by the completed dashboard roadmap:
 
-- Home Assistant `2026.8.3`;
+- Home Assistant `2026.9.3`;
 - one view;
 - three sections;
 - 11 recursive cards;
@@ -35,7 +35,7 @@ shape recorded by the completed dashboard roadmap:
 
 The Home Assistant version baseline follows the repository pin in
 `home-assistant-version.txt`. Under #143 the pin moved from `2026.8.2` to
-`2026.8.3` only after a sanitized read-only production probe proved exact
+`2026.8.3` under #143, then `2026.9.3` under #148, only after sanitized read-only production probes proved exact
 source/runtime version drift. The patch-level alignment does not itself imply a
 dashboard redesign or any production mutation.
 
@@ -94,7 +94,7 @@ It may report:
   classifications;
 - explicit/default/invalid `grid_options` counts;
 - full/bounded/default/unspecified width classifications;
-- custom-card sizing capability as `unknown` or `unavailable`;
+- custom-card sizing capability as `proven`, `unknown` or `unavailable`;
 - native header/badge/Heading/Tile aggregate usage;
 - native replacement eligible/unknown aggregate counts;
 - action surfaces classified only as informational, navigation,
@@ -110,10 +110,11 @@ or presence data.
 
 ## Decisions
 
-The allowed successful decisions are:
+The current #148 terminal decisions are:
 
-- `DASHBOARD_CURRENTLY_OPTIMAL_NO_CHANGE`
-- `READY_FOR_BOUNDED_DASHBOARD_QUALITY_PASS`
+- `DASHBOARD_2026_9_CURRENTLY_ALIGNED_NO_CHANGE`
+- `READY_FOR_BOUNDED_MAJAS_2026_9_APPLY`
+- `NEEDS_PRIVATE_REVIEW`
 
 The fail-closed decision is:
 
@@ -122,9 +123,13 @@ The fail-closed decision is:
 
 A successful current-state audit does not guess a visual redesign from a
 screenshot. A bounded candidate is emitted only when the source can prove a
-specific class without exposing private values. The initial supported bounded
-class is `ACTION_SAFETY` for an unguarded higher-impact state-changing action
-that can be classified privately.
+specific class without exposing private values. The #148 audit additionally classifies top-level custom-card `section_mode`,
+fixed root dimensions, dead `triggers_update`, legacy service-action syntax, and
+the legacy top-level Lovelace `mode` option. The in-memory planner may modify
+only those proven classes; Browser Mod `fire-dom-event` actions are preserved,
+and no `grid_options` values are guessed. A final READY decision requires a
+private full-candidate validation against the exact running Home Assistant
+version.
 
 Uncertain custom-card sizing or native-card equivalence is reported as
 uncertainty, not as an automatic candidate.

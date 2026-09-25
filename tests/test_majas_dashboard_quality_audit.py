@@ -27,11 +27,14 @@ def custom_card(
     tap_action=None,
     hold_action=None,
     double_tap_action=None,
+    section_mode=True,
 ):
     card = {
         "type": "custom:synthetic-card",
         "entity": "sensor.synthetic",
     }
+    if section_mode is not None:
+        card["section_mode"] = section_mode
     if grid_options is not None:
         card["grid_options"] = grid_options
     if tap_action is not None:
@@ -64,7 +67,7 @@ class DashboardQualityAuditTests(unittest.TestCase):
         report = analyze_dashboard_quality(accepted_payload())
 
         self.assertEqual(
-            report["decision"], "DASHBOARD_CURRENTLY_OPTIMAL_NO_CHANGE"
+            report["decision"], "DASHBOARD_2026_9_CURRENTLY_ALIGNED_NO_CHANGE"
         )
         self.assertEqual(report["structure"]["card_count"], 11)
         self.assertEqual(report["layout"]["top_level_card_count"], 11)
@@ -167,7 +170,7 @@ class DashboardQualityAuditTests(unittest.TestCase):
         report = analyze_dashboard_quality(payload)
 
         self.assertEqual(
-            report["decision"], "DASHBOARD_CURRENTLY_OPTIMAL_NO_CHANGE"
+            report["decision"], "DASHBOARD_2026_9_CURRENTLY_ALIGNED_NO_CHANGE"
         )
         self.assertEqual(report["actions"]["confirmation_coverage_count"], 1)
         self.assertEqual(report["actions"]["unguarded_higher_impact_count"], 0)
@@ -184,7 +187,7 @@ class DashboardQualityAuditTests(unittest.TestCase):
         report = analyze_dashboard_quality(payload)
 
         self.assertEqual(
-            report["decision"], "READY_FOR_BOUNDED_DASHBOARD_QUALITY_PASS"
+            report["decision"], "READY_FOR_BOUNDED_MAJAS_2026_9_APPLY"
         )
         self.assertEqual(report["actions"]["confirmation_coverage_count"], 0)
         self.assertEqual(report["actions"]["unguarded_higher_impact_count"], 1)
@@ -200,12 +203,100 @@ class DashboardQualityAuditTests(unittest.TestCase):
         report = analyze_dashboard_quality(payload)
 
         self.assertEqual(
-            report["decision"], "READY_FOR_BOUNDED_DASHBOARD_QUALITY_PASS"
+            report["decision"], "READY_FOR_BOUNDED_MAJAS_2026_9_APPLY"
         )
         self.assertEqual(report["candidate_classes"], ["ACTION_SAFETY"])
         self.assertEqual(
             report["actions"]["unguarded_higher_impact_count"], 1
         )
+
+    def test_missing_section_mode_is_detected_when_capability_proven(self):
+        payload = accepted_payload()
+        for section in payload["views"][0]["sections"]:
+            for card in section["cards"]:
+                card.pop("section_mode")
+
+        report = analyze_dashboard_quality(
+            payload, custom_card_sections_capability="proven"
+        )
+
+        section_mode = report["layout"]["custom_cards"]["section_mode"]
+        self.assertEqual(section_mode["missing_count"], 11)
+        self.assertIn("SECTIONS_SIZING", report["candidate_classes"])
+        self.assertEqual(report["decision"], "READY_FOR_BOUNDED_MAJAS_2026_9_APPLY")
+
+    def test_missing_section_mode_needs_review_when_capability_unknown(self):
+        payload = accepted_payload()
+        for section in payload["views"][0]["sections"]:
+            for card in section["cards"]:
+                card.pop("section_mode")
+
+        report = analyze_dashboard_quality(payload)
+
+        self.assertEqual(report["decision"], "NEEDS_PRIVATE_REVIEW")
+        self.assertIn(
+            "CUSTOM_CARD_SECTIONS_CAPABILITY_NOT_PROVEN", report["reasons"]
+        )
+
+    def test_fixed_root_dimensions_and_dead_triggers_are_classified(self):
+        payload = accepted_payload()
+        for section in payload["views"][0]["sections"]:
+            for card in section["cards"]:
+                card["template"] = "synthetic"
+        payload["button_card_templates"] = {
+            "synthetic": {
+                "triggers_update": ["sensor.synthetic"],
+                "styles": {"card": [{"height": "64px"}, {"width": "100%"}]},
+            }
+        }
+
+        report = analyze_dashboard_quality(
+            payload, triggers_update_runtime="absent"
+        )
+        custom = report["layout"]["custom_cards"]
+
+        self.assertEqual(custom["template_metrics"]["fixed_root_height_count"], 1)
+        self.assertEqual(custom["template_metrics"]["fixed_root_width_count"], 1)
+        self.assertEqual(custom["triggers_update_declaration_count"], 1)
+        self.assertIn("DEAD_TRIGGERS_UPDATE", report["candidate_classes"])
+
+    def test_invalid_section_mode_fails_closed(self):
+        payload = accepted_payload()
+        payload["views"][0]["sections"][0]["cards"][0]["section_mode"] = "yes"
+
+        with self.assertRaisesRegex(
+            DashboardQualityAuditError, "SECTION_MODE_DECLARATION_INVALID"
+        ):
+            analyze_dashboard_quality(payload)
+
+    def test_action_syntax_classifies_legacy_and_browser_event(self):
+        payload = accepted_payload()
+        payload["views"][0]["sections"][0]["cards"][0]["tap_action"] = {
+            "action": "call-service",
+            "service": "light.turn_on",
+            "target": {"entity_id": "light.synthetic"},
+        }
+        payload["views"][0]["sections"][0]["cards"][1]["tap_action"] = {
+            "action": "fire-dom-event",
+            "browser_mod": {"service": "browser_mod.popup"},
+        }
+
+        report = analyze_dashboard_quality(payload)
+        syntax = report["actions"]["syntax_counts"]
+
+        self.assertEqual(syntax["legacy_service_action"], 1)
+        self.assertEqual(syntax["browser_or_integration_event"], 1)
+        self.assertIn("ACTION_SYNTAX", report["candidate_classes"])
+        self.assertNotIn("light.synthetic", str(report))
+        self.assertNotIn("browser_mod.popup", str(report))
+
+    def test_legacy_lovelace_mode_is_bounded_candidate(self):
+        report = analyze_dashboard_quality(
+            accepted_payload(), legacy_lovelace_mode_present=True
+        )
+
+        self.assertTrue(report["configuration"]["legacy_lovelace_mode_present"])
+        self.assertIn("LOVELACE_LEGACY_MODE", report["candidate_classes"])
 
     def test_malformed_card_structure_fails_closed(self):
         payload = accepted_payload()

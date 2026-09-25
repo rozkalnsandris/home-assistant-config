@@ -30,7 +30,7 @@ sensor.ci_placeholder:
 """,
     "private/http.yaml": "{}\n",
     "private/lovelace.yaml": """\
-mode: storage
+dashboards: {}
 """,
     "private/utility_meter.yaml": """\
 ci_energy_daily:

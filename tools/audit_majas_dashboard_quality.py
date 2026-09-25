@@ -18,7 +18,7 @@ from tools.plan_majas_dashboard_activation import (
     resolve_binding_owner,
 )
 
-EXPECTED_HA_VERSION = "2026.8.3"
+EXPECTED_HA_VERSION = "2026.9.3"
 DEFAULT_CONFIG_ROOT = Path("/config")
 DEFAULT_DASHBOARD_TITLE = "Mājas YAML"
 
@@ -153,6 +153,103 @@ def _grid_options_class(card: dict[str, Any]) -> tuple[str, str]:
     return "invalid", "invalid"
 
 
+def _section_mode_class(card: dict[str, Any]) -> str:
+    if "section_mode" not in card:
+        return "missing"
+    value = card.get("section_mode")
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return "invalid"
+
+
+def _style_root_dimension_flags(template: Any) -> tuple[bool, bool]:
+    if not isinstance(template, dict):
+        return False, False
+    styles = template.get("styles")
+    if not isinstance(styles, dict):
+        return False, False
+    card_styles = styles.get("card")
+    if card_styles is None:
+        return False, False
+    if not isinstance(card_styles, list):
+        raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_INVALID")
+    height = False
+    width = False
+    for item in card_styles:
+        if not isinstance(item, dict):
+            raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_INVALID")
+        height = height or "height" in item
+        width = width or "width" in item
+    return height, width
+
+
+def _template_references(card: dict[str, Any]) -> list[str]:
+    value = card.get("template")
+    if value is None:
+        return []
+    if isinstance(value, str) and value:
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) and item for item in value):
+        return list(value)
+    raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_REFERENCE_INVALID")
+
+
+def _template_metrics(
+    payload: dict[str, Any], cards: list[dict[str, Any]]
+) -> dict[str, int]:
+    templates = payload.get("button_card_templates")
+    referenced = {
+        name
+        for card in cards
+        if _is_custom(card)
+        for name in _template_references(card)
+    }
+    if templates is None:
+        if referenced:
+            raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_UNAVAILABLE")
+        return {
+            "template_count": 0,
+            "referenced_template_count": 0,
+            "fixed_root_height_count": 0,
+            "fixed_root_width_count": 0,
+            "triggers_update_declaration_count": 0,
+        }
+    if not isinstance(templates, dict):
+        raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_INVALID")
+    if not referenced.issubset(templates):
+        raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_UNAVAILABLE")
+    height_count = 0
+    width_count = 0
+    triggers_count = 0
+    for name in referenced:
+        template = templates[name]
+        if not isinstance(template, dict):
+            raise DashboardQualityAuditError("CUSTOM_CARD_TEMPLATE_INVALID")
+        height, width = _style_root_dimension_flags(template)
+        height_count += int(height)
+        width_count += int(width)
+        triggers_count += int("triggers_update" in template)
+    return {
+        "template_count": len(templates),
+        "referenced_template_count": len(referenced),
+        "fixed_root_height_count": height_count,
+        "fixed_root_width_count": width_count,
+        "triggers_update_declaration_count": triggers_count,
+    }
+
+
+def _recursive_key_count(value: Any, key: str) -> int:
+    if isinstance(value, dict):
+        return int(key in value) + sum(
+            _recursive_key_count(item, key) for item in value.values()
+        )
+    if isinstance(value, list):
+        return sum(_recursive_key_count(item, key) for item in value)
+    return 0
+
+
 def _iter_top_level_cards(payload: dict[str, Any]) -> list[dict[str, Any]]:
     cards: list[dict[str, Any]] = []
     views = payload.get("views")
@@ -264,6 +361,8 @@ def _layout_metrics(
         "invalid": 0,
     }
     custom_declaration_counts = {"explicit": 0, "default": 0, "invalid": 0}
+    section_mode_counts = {"true": 0, "false": 0, "missing": 0, "invalid": 0}
+    template_metrics = _template_metrics(payload, cards)
 
     native_heading_card_count = 0
     native_heading_badge_count = 0
@@ -276,6 +375,7 @@ def _layout_metrics(
 
         if _is_custom(card):
             custom_declaration_counts[declaration] += 1
+            section_mode_counts[_section_mode_class(card)] += 1
 
         card_type = card.get("type")
         if card_type == "heading":
@@ -290,6 +390,8 @@ def _layout_metrics(
 
     if declaration_counts["invalid"] or width_counts["invalid"]:
         raise DashboardQualityAuditError("LAYOUT_DECLARATION_INVALID")
+    if section_mode_counts["invalid"]:
+        raise DashboardQualityAuditError("SECTION_MODE_DECLARATION_INVALID")
 
     return {
         "all_views_sections": all_views_sections,
@@ -312,10 +414,18 @@ def _layout_metrics(
             "explicit_grid_options_count": custom_declaration_counts["explicit"],
             "default_grid_options_count": custom_declaration_counts["default"],
             "invalid_grid_options_count": custom_declaration_counts["invalid"],
+            "section_mode": {
+                "true_count": section_mode_counts["true"],
+                "false_count": section_mode_counts["false"],
+                "missing_count": section_mode_counts["missing"],
+                "invalid_count": section_mode_counts["invalid"],
+            },
             "runtime_sections_sizing_capability": (
-                "unknown"
-                if any(_is_custom(card) for card in cards)
-                else "unavailable"
+                "unknown" if any(_is_custom(card) for card in cards) else "unavailable"
+            ),
+            "template_metrics": template_metrics,
+            "triggers_update_declaration_count": _recursive_key_count(
+                payload, "triggers_update"
             ),
             "automatic_sizing_rewrite_authorized": False,
         },
@@ -390,6 +500,12 @@ def _action_metrics(cards: list[dict[str, Any]]) -> dict[str, Any]:
     state_changing_double_tap = 0
     state_changing_tap_with_hold_alternative = 0
     state_changing_tap_with_double_tap_alternative = 0
+    syntax_counts = {
+        "perform_action": 0,
+        "legacy_service_action": 0,
+        "browser_or_integration_event": 0,
+        "other": 0,
+    }
 
     for top_level in cards:
         for card in _walk_card(top_level):
@@ -402,6 +518,16 @@ def _action_metrics(cards: list[dict[str, Any]]) -> dict[str, Any]:
                 action = card.get(key)
                 surface, impact = _classify_action(action)
                 surfaces[surface] += 1
+                if isinstance(action, dict):
+                    action_type = action.get("action")
+                    if action_type == "perform-action":
+                        syntax_counts["perform_action"] += 1
+                    elif action_type == "call-service":
+                        syntax_counts["legacy_service_action"] += 1
+                    elif action_type == "fire-dom-event":
+                        syntax_counts["browser_or_integration_event"] += 1
+                    else:
+                        syntax_counts["other"] += 1
 
                 if surface != "state_changing":
                     continue
@@ -446,6 +572,7 @@ def _action_metrics(cards: list[dict[str, Any]]) -> dict[str, Any]:
             state_changing_tap_with_double_tap_alternative
         ),
         "unguarded_higher_impact_count": unguarded_higher_impact,
+        "syntax_counts": syntax_counts,
     }
 
 
@@ -480,7 +607,13 @@ def inventory_active_tree(active_root: Path) -> dict[str, Any]:
     }
 
 
-def analyze_dashboard_quality(payload: dict[str, Any]) -> dict[str, Any]:
+def analyze_dashboard_quality(
+    payload: dict[str, Any],
+    *,
+    custom_card_sections_capability: str = "unknown",
+    triggers_update_runtime: str = "unknown",
+    legacy_lovelace_mode_present: bool = False,
+) -> dict[str, Any]:
     structure = structural_counts(payload)
     if structure != EXPECTED_STRUCTURE:
         raise DashboardQualityAuditError("POST_ROADMAP_STRUCTURE_MISMATCH")
@@ -496,16 +629,47 @@ def analyze_dashboard_quality(payload: dict[str, Any]) -> dict[str, Any]:
         raise DashboardQualityAuditError("POST_ROADMAP_LAYOUT_BASELINE_MISMATCH")
 
     actions = _action_metrics(cards)
+    if custom_card_sections_capability not in {"proven", "unknown", "unavailable"}:
+        raise DashboardQualityAuditError("CUSTOM_CARD_CAPABILITY_INVALID")
+    if triggers_update_runtime not in {"absent", "active", "unknown"}:
+        raise DashboardQualityAuditError("TRIGGERS_UPDATE_RUNTIME_INVALID")
+    layout["custom_cards"]["runtime_sections_sizing_capability"] = (
+        custom_card_sections_capability
+    )
+    layout["custom_cards"]["triggers_update_runtime"] = triggers_update_runtime
 
     candidate_classes: list[str] = []
+    review_reasons: list[str] = []
+    section_mode = layout["custom_cards"]["section_mode"]
+    custom_count = structure["custom_card_count"]
+    if section_mode["true_count"] != custom_count:
+        if custom_card_sections_capability == "proven":
+            candidate_classes.append("SECTIONS_SIZING")
+        else:
+            review_reasons.append("CUSTOM_CARD_SECTIONS_CAPABILITY_NOT_PROVEN")
+
+    triggers_count = layout["custom_cards"]["triggers_update_declaration_count"]
+    if triggers_count:
+        if triggers_update_runtime == "absent":
+            candidate_classes.append("DEAD_TRIGGERS_UPDATE")
+        else:
+            review_reasons.append("TRIGGERS_UPDATE_RUNTIME_NOT_PROVEN_ABSENT")
+
+    if actions["syntax_counts"]["legacy_service_action"] > 0:
+        candidate_classes.append("ACTION_SYNTAX")
+    if legacy_lovelace_mode_present:
+        candidate_classes.append("LOVELACE_LEGACY_MODE")
     if actions["unguarded_higher_impact_count"] > 0:
         candidate_classes.append("ACTION_SAFETY")
 
-    if candidate_classes:
-        decision = "READY_FOR_BOUNDED_DASHBOARD_QUALITY_PASS"
+    if review_reasons:
+        decision = "NEEDS_PRIVATE_REVIEW"
+        reasons = sorted(set(review_reasons))
+    elif candidate_classes:
+        decision = "READY_FOR_BOUNDED_MAJAS_2026_9_APPLY"
         reasons = ["EVIDENCE_BACKED_BOUNDED_CANDIDATE_PRESENT"]
     else:
-        decision = "DASHBOARD_CURRENTLY_OPTIMAL_NO_CHANGE"
+        decision = "DASHBOARD_2026_9_CURRENTLY_ALIGNED_NO_CHANGE"
         reasons = ["NO_EVIDENCE_BACKED_BOUNDED_CHANGE"]
 
     return {
@@ -515,6 +679,9 @@ def analyze_dashboard_quality(payload: dict[str, Any]) -> dict[str, Any]:
         "structure": structure,
         "layout": layout,
         "actions": actions,
+        "configuration": {
+            "legacy_lovelace_mode_present": legacy_lovelace_mode_present,
+        },
         "privacy": privacy_report(),
         "mutation": mutation_report(),
     }
@@ -526,6 +693,8 @@ def build_live_report(
     dashboard_title: str,
     expected_version: str,
     running_version: str,
+    custom_card_sections_capability: str = "unknown",
+    triggers_update_runtime: str = "unknown",
 ) -> dict[str, Any]:
     if running_version != expected_version:
         return blocked_report("HOME_ASSISTANT_VERSION_MISMATCH")
@@ -535,7 +704,7 @@ def build_live_report(
         (
             _owner_path,
             owner_kind,
-            _owner_payload,
+            owner_payload,
             _dashboard_key,
             _definition,
             active_dashboard,
@@ -547,7 +716,18 @@ def build_live_report(
             return blocked_report("ACTIVE_MODULAR_TREE_MISMATCH")
 
         payload = load_candidate_tree(active_root)
-        analysis = analyze_dashboard_quality(payload)
+        if owner_kind == "CONFIGURATION_ROOT":
+            lovelace_mapping = owner_payload.get("lovelace")
+        else:
+            lovelace_mapping = owner_payload
+        if not isinstance(lovelace_mapping, dict):
+            return blocked_report("LOVELACE_MAPPING_UNAVAILABLE")
+        analysis = analyze_dashboard_quality(
+            payload,
+            custom_card_sections_capability=custom_card_sections_capability,
+            triggers_update_runtime=triggers_update_runtime,
+            legacy_lovelace_mode_present="mode" in lovelace_mapping,
+        )
 
         return {
             "schema": 1,
@@ -568,6 +748,7 @@ def build_live_report(
                 "structure": analysis["structure"],
                 "layout": analysis["layout"],
                 "actions": analysis["actions"],
+                "configuration": analysis["configuration"],
             },
             "privacy": analysis["privacy"],
             "mutation": analysis["mutation"],
@@ -598,6 +779,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config-root", type=Path, default=DEFAULT_CONFIG_ROOT)
     parser.add_argument("--dashboard-title", default=DEFAULT_DASHBOARD_TITLE)
     parser.add_argument("--expected-version", default=EXPECTED_HA_VERSION)
+    parser.add_argument(
+        "--custom-card-sections-capability",
+        choices=("proven", "unknown", "unavailable"),
+        default="unknown",
+    )
+    parser.add_argument(
+        "--triggers-update-runtime",
+        choices=("absent", "active", "unknown"),
+        default="unknown",
+    )
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--stdout", action="store_true")
     return parser.parse_args(argv)
@@ -619,6 +810,10 @@ def main(argv: list[str] | None = None) -> int:
                 dashboard_title=args.dashboard_title,
                 expected_version=args.expected_version,
                 running_version=running,
+                custom_card_sections_capability=(
+                    args.custom_card_sections_capability
+                ),
+                triggers_update_runtime=args.triggers_update_runtime,
             )
 
     if args.stdout:
