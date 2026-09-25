@@ -29,9 +29,7 @@ sensor.ci_placeholder:
   friendly_name: CI Placeholder
 """,
     "private/http.yaml": "{}\n",
-    "private/lovelace.yaml": """\
-mode: storage
-""",
+    "private/lovelace.yaml": "{}\n",
     "private/utility_meter.yaml": """\
 ci_energy_daily:
   source: sensor.ci_energy

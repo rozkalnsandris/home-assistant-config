@@ -1,5 +1,4 @@
 # Example only. The real YAML dashboard registration remains private in this phase.
-mode: storage
 dashboards:
   example-yaml:
     mode: yaml
