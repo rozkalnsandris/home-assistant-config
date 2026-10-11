@@ -13,6 +13,6 @@ permissions:
 jobs:
   workflow-security:
     name: GitHub Actions static analysis
-    uses: rozkalnsandris/ops-workflows/.github/workflows/workflow-security.yml@0450e662093c41e98ca96802b523ac91eb02e5fe
+    uses: rozkalnsandris/ops-workflows/.github/workflows/workflow-security.yml@297f554519849ab8dcaadc5517e60b8269a6efaa
     permissions:
       contents: read
