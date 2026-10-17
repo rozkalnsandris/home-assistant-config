@@ -1,0 +1,42 @@
+# PUBLIC EXAMPLE ONLY. Not loaded by Home Assistant.
+# REPLACE_WITH_PRIVATE_CLIMATE_ENTITY is deliberately invalid until bound locally.
+# Opening this popup on a live system would expose working climate controls.
+# The current specialized Better Thermostat UI must remain unchanged until
+# visual and feature-parity checks have passed under separate LIVE authorization.
+#
+# Browser Mod popup + Bubble Card Climate, matching the documented YAML API:
+# https://github.com/Clooos/Bubble-Card#climate
+# https://github.com/thomasloven/hass-browser_mod/blob/master/documentation/popups.md
+#
+# Bubble Card uses normal climate entity capabilities. Better Thermostat custom
+# indicators (e.g. window detection) are NOT guaranteed by this replacement.
+# Add a preset_modes sub-button only after confirming the entity exposes it.
+type: custom:button-card
+name: Climate UI preview
+icon: mdi:thermostat
+show_state: false
+tap_action:
+  action: fire-dom-event
+  browser_mod:
+    service: browser_mod.popup
+    data:
+      title: Climate UI preview
+      dismissable: true
+      adaptive: true
+      adaptive_allow_mode_change: false
+      adaptive_force_bottom_sheet: true
+      content:
+        type: custom:bubble-card
+        card_type: climate
+        entity: REPLACE_WITH_PRIVATE_CLIMATE_ENTITY
+        name: Thermostat
+        icon: mdi:thermostat
+        show_name: true
+        show_icon: true
+        main_buttons_position: bottom
+        main_buttons_full_width: true
+        sub_button:
+          - name: HVAC modes
+            select_attribute: hvac_modes
+            show_arrow: false
+            state_background: false
