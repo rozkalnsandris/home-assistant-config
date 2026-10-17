@@ -1,0 +1,90 @@
+# Public-safe, non-production examples for compact custom:button-card UI.
+# Do not copy this into the private dashboard without exact local review.
+# No real entity IDs, private bindings, actions, or runtime state included.
+#
+# The header grid reserves a full row for a long greeting; indicator fields
+# can no longer reduce the greeting width. This is intentionally mobile-first.
+# The numeric example rejects blank/invalid/non-finite sensor values and
+# falls back to a valid climate attribute, otherwise displays an em dash.
+button_card_templates:
+  compact_header_example:
+    show_icon: false
+    show_name: false
+    show_state: false
+    styles:
+      card:
+        - height: auto
+        - padding: 8px
+      grid:
+        - grid-template-areas: '"g g g" "a b c" "d d d"'
+        - grid-template-columns: 'repeat(3, minmax(0, 1fr))'
+        - grid-template-rows: auto auto auto
+        - column-gap: 8px
+        - row-gap: 8px
+      custom_fields:
+        g:
+          - grid-area: g
+          - min-width: 0
+          - white-space: normal
+          - overflow-wrap: anywhere
+        a:
+          - grid-area: a
+          - min-width: 0
+        b:
+          - grid-area: b
+          - min-width: 0
+        c:
+          - grid-area: c
+          - min-width: 0
+        d:
+          - grid-area: d
+          - min-width: 0
+    custom_fields:
+      g:
+        card:
+          type: custom:button-card
+          show_icon: false
+          show_state: false
+          name: A longer welcome greeting
+          styles:
+            card:
+              - height: auto
+            name:
+              - white-space: normal
+              - overflow: visible
+              - overflow-wrap: anywhere
+      a: Window status
+      b: Climate status
+      c: Weather status
+      d: Day and date
+
+  finite_temperature_label_example:
+    variables:
+      preferred_sensor: null
+      climate_fallback: null
+    show_icon: false
+    show_name: false
+    show_label: true
+    label: |
+      [[[
+        const readNumber = (value) => {
+          if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+          }
+          if (typeof value !== 'string' || value.trim() === '') {
+            return null;
+          }
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : null;
+        };
+        const primary = variables.preferred_sensor
+          ? states[variables.preferred_sensor]
+          : null;
+        const fallback = variables.climate_fallback
+          ? states[variables.climate_fallback]
+          : null;
+        const current = readNumber(primary?.state);
+        const secondary = readNumber(fallback?.attributes?.current_temperature);
+        const result = current !== null ? current : secondary;
+        return result === null ? '—' : result.toFixed(1) + '°C';
+      ]]]
