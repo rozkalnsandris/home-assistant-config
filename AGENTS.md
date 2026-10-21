@@ -2,6 +2,15 @@
 
 This is a **public** repository for the explicitly reviewed, publishable subset of Home Assistant configuration source. Treat every change as both production-sensitive and public-information-sensitive even though GitHub Actions are validation-only.
 
+## GitHub-first / bounded RDC fallback v1 — mandatory tool priority
+
+Accepted canonical policy: `rozkalnsandris/ops-workflows@4e89b75d7f496dfb43fd9c1eb10a995fad53fdd8`, `docs/GITHUB_FIRST_RDC_FALLBACK_V1.md` and `policy/github-first-rdc-fallback-v1.json`. This repository adopts it through `.github/github-first-rdc-v1.json` and `docs/GITHUB_FIRST_RDC_ADOPTION_V1.md`.
+
+- **Choose per work step.** Prefer connected GitHub tools for public repository files/source, branches, commits, issues, PRs, CI/checks, reviews, repository reads and durable continuation whenever they can give equivalent correctness and evidence. Prefer GitHub-hosted Actions for safe source tests. Do not use RDC, SSH, a host checkout, shell `git`, `gh` or `curl` as a convenient alternate GitHub client.
+- **RDC is an authorized exception, not a substitute.** Use only the minimum genuinely host-local action that connected GitHub tools and applicable hosted CI cannot perform equivalently (for example, separately authorized bounded Home Assistant runtime observation or exact LIVE execution). Before using RDC, record a public-safe exception with `STEP`, `REPOSITORY_AND_TARGET`, `GITHUB_CAPABILITY_CHECKED`, `PRECISE_CAPABILITY_GAP`, `GITHUB_CI_NOT_EQUIVALENT_REASON`, `MINIMAL_RDC_OPERATION`, `EXISTING_AUTHORIZATION` and `GITHUB_RETURN_EVIDENCE`. Do not disclose private Home Assistant state, household/device metadata, paths, tokens or protected details in this public repository. Return to GitHub for canonical source/review/CI after the host step.
+- **STOP** on GitHub access refusal, 403/429/rate limit, tool errors, timeouts, uncertain dispatched mutations, unproven capability gap or absent owner authorization. Such failures never authorize host-shell GitHub writes, alternate transport, duplicate operations, automatic retry, rollback or cleanup.
+- This priority **does not change authorization or start modes**. Existing `.github/start-mode-routing.json` remains authoritative: bare START is FAST-LANE v2.2; `AUTO-RUN FULL`, `GITHUB-ONLY` and `LIVE-ALL` remain explicitly activated only as documented. Public-source privacy checks, controller #140 boundaries, explicit owner MERGE, separate exact Home Assistant LIVE approval, no implicit device/host actuation, protected configuration, backup, secret, permission and infrastructure gates remain unchanged. GitHub-first is not the distinct GITHUB-ONLY deferred-LIVE mode.
+
 ## Source-of-truth boundary
 
 - Track only declarative, reviewable Home Assistant source that has been explicitly classified as safe for public Git.
