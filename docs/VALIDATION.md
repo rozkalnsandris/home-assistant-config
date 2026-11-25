@@ -2,11 +2,7 @@
 
 The repository records the live Home Assistant release in `home-assistant-version.txt`.
 
-Current reviewed production baseline:
-
-```text
-2026.8.2
-```
+The version pin is the single source of truth for the exact release used by CI.
 
 CI never validates against `latest`.
 
@@ -27,7 +23,7 @@ The builder does not enumerate or copy a real `private/`, real `secrets.yaml`, `
 GitHub Actions then pulls:
 
 ```text
-ghcr.io/home-assistant/home-assistant:2026.8.2
+ghcr.io/home-assistant/home-assistant:<version from home-assistant-version.txt>
 ```
 
 and runs Home Assistant's supported configuration checker with warnings treated as failures:
