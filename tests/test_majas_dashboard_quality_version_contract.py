@@ -16,8 +16,8 @@ class DashboardQualityVersionContractTests(unittest.TestCase):
         ).strip()
         self.assertEqual(EXPECTED_HA_VERSION, pinned)
 
-    def test_current_patch_baseline_is_2026_9_3(self):
-        self.assertEqual(EXPECTED_HA_VERSION, "2026.9.3")
+    def test_current_patch_baseline_is_2026_11_2(self):
+        self.assertEqual(EXPECTED_HA_VERSION, "2026.11.2")
 
 
 if __name__ == "__main__":
