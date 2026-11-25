@@ -10,7 +10,7 @@ This repository is intentionally separate from `rozkalnsandris/RPi5_main`:
 
 ## Current status
 
-Repository safety foundation, read-only live inventory and exact-version validation are complete. The reviewed production baseline is Home Assistant `2026.8.2`.
+Repository safety foundation, read-only live inventory and exact-version validation are complete. The exact Home Assistant validation release is pinned in `home-assistant-version.txt`.
 
 Public Git now contains the audited generic automations/scripts/scenes plus the sanitized core configuration/package structure. Complex household-specific mappings are referenced through local-only `private/*.yaml`; scalar private package values use Home Assistant `!secret` bindings. Neutral examples document the expected local shape without publishing the real values.
 
