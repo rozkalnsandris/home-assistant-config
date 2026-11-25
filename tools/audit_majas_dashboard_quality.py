@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit the accepted Mājas dashboard against the current 2026.9 contract."""
+"""Audit the accepted Mājas dashboard against the pinned release contract."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from tools import audit_majas_dashboard_quality_legacy as _legacy
 from tools.materialize_majas_dashboard_candidate import load_candidate_tree
 from tools.plan_majas_dashboard_activation import resolve_binding_owner
 
-EXPECTED_HA_VERSION = "2026.9.3"
+EXPECTED_HA_VERSION = "2026.11.2"
 DEFAULT_CONFIG_ROOT = Path("/config")
 DEFAULT_DASHBOARD_TITLE = "Mājas YAML"
 BUTTON_CARD_BUNDLE_RELATIVE = Path("www/community/button-card/button-card.js")
@@ -370,7 +370,7 @@ def build_live_report(
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Audit the accepted Mājas dashboard for Home Assistant 2026.9 "
+            "Audit the accepted Mājas dashboard for the pinned Home Assistant release "
             "Sections and action modernization signals."
         )
     )
