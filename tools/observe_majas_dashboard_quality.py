@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +28,6 @@ class ObservationError(RuntimeError):
 
 def _bounded(path: Path, root: Path) -> Path:
     # Check the lexical path before resolution so a symlink cannot be hidden.
-    import os
-
     path = Path(os.path.abspath(path))
     if not path.is_relative_to(root):
         raise ObservationError()
@@ -54,7 +53,7 @@ def _mapping(path: Path, root: Path) -> dict[str, Any]:
     return load_mapping(path)
 
 
-def _list(value: Any, owner: Path, root: Path) -> list[Any]:
+def _list(value: Any, owner: Path, root: Path) -> list[tuple[Path, Any]]:
     if isinstance(value, TaggedValue):
         if value.tag != "!include_dir_list" or not isinstance(value.value, str):
             raise ObservationError()
@@ -133,18 +132,21 @@ def load_registered_dashboard(
     return payload, lovelace
 
 
-def _validate_value(value: Any, depth: int = 0) -> None:
-    """Reject unresolved tags, recursive aliases, malformed keys and deep trees."""
-    if depth > 64 or isinstance(value, TaggedValue):
+def _validate_value(value: Any, depth: int = 0, budget: list[int] | None = None) -> None:
+    """Reject unresolved tags, recursive aliases and excessive expansion."""
+    if budget is None:
+        budget = [100_000]
+    budget[0] -= 1
+    if budget[0] < 0 or depth > 64 or isinstance(value, TaggedValue):
         raise ObservationError()
     if isinstance(value, dict):
         for key, item in value.items():
             if not isinstance(key, str):
                 raise ObservationError()
-            _validate_value(item, depth + 1)
+            _validate_value(item, depth + 1, budget)
     elif isinstance(value, list):
         for item in value:
-            _validate_value(item, depth + 1)
+            _validate_value(item, depth + 1, budget)
 
 
 def observe_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -203,7 +205,13 @@ def build_report(
         payload, lovelace = load_registered_dashboard(config_root, dashboard_title)
         report = observe_payload(payload)
         report["lovelace"] = quality.classify_lovelace_mode(lovelace)
-        report["dependencies"] = quality.detect_button_card_capability(config_root)
+        # Do not follow a redirected asset into another part of the config tree.
+        root = config_root.resolve(strict=True)
+        asset = root / quality.BUTTON_CARD_BUNDLE_RELATIVE
+        if asset.exists() or asset.is_symlink():
+            if not _bounded(asset, root).is_file():
+                raise ObservationError()
+        report["dependencies"] = quality.detect_button_card_capability(root)
         return report
     except Exception:
         return quality.blocked_report("CURRENT_DASHBOARD_OBSERVATION_FAILED")
